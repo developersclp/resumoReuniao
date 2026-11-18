@@ -1,0 +1,1097 @@
+/* ==========================================================================
+   LOCAR Gestão de Resíduos — Sistema Gerador de Atas e Plano de Ação
+   Estilos da Aplicação + Folha A4 (Padrão DIE / Impressão)
+   ========================================================================== */
+
+:root {
+  --locar-green: #0a7e3a;
+  --locar-green-dark: #075b29;
+  --locar-olive: #b4c85a;
+  --die-moss: #0a7e3a;
+  --die-moss-dark: #086830;
+  --die-sage: #b4c85a;
+  --ui-bg: #eef2ee;
+  --ui-surface: #ffffff;
+  --ui-border: #d5ddd5;
+  --ui-text: #1f2a22;
+  --ui-muted: #5a695d;
+  --danger: #c62828;
+  --warn: #ef6c00;
+  --ok: #2e7d32;
+  --radius: 10px;
+  --shadow-sm: 0 2px 6px rgba(16, 40, 22, 0.06);
+  --shadow-md: 0 8px 24px rgba(16, 40, 22, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: "Segoe UI", Calibri, -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+  color: var(--ui-text);
+  background: var(--ui-bg);
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* -------------------- Top Navigation -------------------- */
+.topbar {
+  min-height: 64px;
+  height: auto;
+  background: #ffffff;
+  border-bottom: 2px solid var(--locar-green);
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  flex-shrink: 0;
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.topbar-logo {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+}
+
+.topbar-title-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--locar-green-dark);
+  line-height: 1.2;
+}
+
+.topbar-subtitle {
+  font-size: 12px;
+  color: var(--ui-muted);
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.preset-select {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: #f8faf8;
+  color: var(--ui-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  white-space: nowrap;
+}
+
+.btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.btn-primary {
+  background: var(--locar-green);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background: var(--locar-green-dark);
+}
+
+.btn-secondary {
+  background: #f3f7f3;
+  color: var(--locar-green-dark);
+  border-color: #c7d8c8;
+}
+
+.btn-secondary:hover {
+  background: #e6efe7;
+}
+
+.btn-outline {
+  background: #ffffff;
+  color: var(--ui-text);
+  border-color: var(--ui-border);
+}
+
+.btn-outline:hover {
+  background: #f5f7f5;
+}
+
+.btn-danger-ghost {
+  background: transparent;
+  color: var(--danger);
+  border-color: transparent;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.btn-danger-ghost:hover {
+  background: #fdecec;
+}
+
+.btn-sm {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+/* -------------------- Main Workspace Layout -------------------- */
+.workspace {
+  display: grid;
+  grid-template-columns: 440px 1fr;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-panel {
+  background: var(--ui-surface);
+  border-right: 1px solid var(--ui-border);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid var(--ui-border);
+  background: #f6f9f6;
+}
+
+.tab-btn {
+  padding: 12px 6px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.tab-btn:hover {
+  color: var(--locar-green-dark);
+  background: rgba(10, 126, 58, 0.04);
+}
+
+.tab-btn.active {
+  color: var(--locar-green-dark);
+  background: #ffffff;
+  border-bottom-color: var(--locar-green);
+}
+
+.tab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+.panel-section {
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #edf2ed;
+}
+
+.panel-section:last-child {
+  border-bottom: none;
+}
+
+.section-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--locar-green-dark);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.field {
+  margin-bottom: 11px;
+}
+
+.field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-muted);
+  margin-bottom: 4px;
+}
+
+.field input[type="text"],
+.field input[type="number"],
+.field input[type="password"],
+.field select,
+.field textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--ui-text);
+  background: #ffffff;
+  transition: border-color 0.15s ease;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: var(--locar-green);
+  box-shadow: 0 0 0 3px rgba(10, 126, 58, 0.1);
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* -------------------- Dropzones -------------------- */
+.dropzone {
+  border: 2px dashed #b9ccb9;
+  border-radius: 10px;
+  padding: 14px 12px;
+  text-align: center;
+  background: #f9fbf9;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-bottom: 10px;
+}
+
+.dropzone:hover,
+.dropzone.dragover {
+  border-color: var(--locar-green);
+  background: #edf7f0;
+}
+
+.dropzone strong {
+  display: block;
+  font-size: 13px;
+  color: var(--locar-green-dark);
+  margin-bottom: 2px;
+}
+
+.dropzone span {
+  font-size: 11.5px;
+  color: var(--ui-muted);
+}
+
+.file-status {
+  font-size: 11.5px;
+  color: var(--locar-green-dark);
+  background: #e9f5ec;
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  display: none;
+}
+
+.file-status.visible {
+  display: block;
+}
+
+/* -------------------- Action Cards in Editor -------------------- */
+.action-editor-card {
+  background: #f9fbf9;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.action-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.action-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--locar-green-dark);
+  background: #e2f1e6;
+  padding: 2px 8px;
+  border-radius: 99px;
+}
+
+.action-card-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.icon-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--ui-border);
+  background: #ffffff;
+  color: var(--ui-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.icon-btn:hover {
+  background: #eef4ee;
+  color: var(--ui-text);
+}
+
+.icon-btn.del:hover {
+  background: #fdecec;
+  color: var(--danger);
+  border-color: #f5bcbc;
+}
+
+/* -------------------- Indicator Chips in Editor -------------------- */
+.kpi-editor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.kpi-chip {
+  background: #f9fbf9;
+  border: 1px solid var(--ui-border);
+  border-left: 3px solid var(--locar-green);
+  border-radius: 6px;
+  padding: 7px 9px;
+  position: relative;
+}
+
+.kpi-chip.warn {
+  border-left-color: var(--warn);
+}
+
+.kpi-chip.danger {
+  border-left-color: var(--danger);
+}
+
+.kpi-chip-label {
+  font-size: 10.5px;
+  color: var(--ui-muted);
+  font-weight: 600;
+}
+
+.kpi-chip-value {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ui-text);
+}
+
+/* -------------------- Preview Area -------------------- */
+.preview-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: #dde3de;
+}
+
+.preview-toolbar {
+  height: 44px;
+  background: #f4f7f4;
+  border-bottom: 1px solid var(--ui-border);
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--ui-muted);
+}
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.preview-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.sheet-wrapper {
+  transform-origin: top center;
+  transition: transform 0.15s ease;
+}
+
+/* ==========================================================================
+   FOLHA A4 — RELATÓRIO / ATA OFICIAL LOCAR (PADRÃO DIE)
+   ========================================================================== */
+.a4-sheet {
+  width: 210mm;
+  min-height: 297mm;
+  background: #ffffff;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  color: #1f2421;
+  font-family: Calibri, "Segoe UI", Arial, sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Faixa superior encostada no topo absoluto da folha com o verde vivo da logo Locar */
+.sheet-banner {
+  height: 9mm;
+  background: linear-gradient(90deg, #07662e 0%, #0a7e3a 55%, #0d8e42 100%);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 14mm;
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.sheet-unit-name {
+  color: #ffffff;
+  font-size: 11pt;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: 0.2px;
+}
+
+/* Cabeçalho principal: Mancha orgânica com logo à esquerda + Metadados à direita */
+.sheet-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 3.5mm 14mm 0 11mm;
+  position: relative;
+  min-height: 38mm;
+  flex-shrink: 0;
+}
+
+.logo-organic-container {
+  position: relative;
+  width: 72mm;
+  height: 35mm;
+  margin-top: 1mm;
+  flex-shrink: 0;
+}
+
+/* Mancha orgânica no verde vivo oficial da logo Locar (estilo DIE com cores vivas) */
+.organic-blob {
+  position: relative;
+  width: 68mm;
+  height: 34mm;
+  background: linear-gradient(145deg, #0c8c42 0%, #0a7e3a 65%, #086830 100%);
+  border-radius: 52% 48% 58% 42% / 44% 55% 45% 56%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4mm 6mm;
+  box-shadow:
+    -3px 2px 0 1px rgba(10, 126, 58, 0.24),
+    4px -1px 0 2px rgba(180, 200, 90, 0.28);
+}
+
+.organic-blob::before {
+  content: "";
+  position: absolute;
+  left: -4mm;
+  bottom: -4.5mm;
+  width: 14mm;
+  height: 14mm;
+  border-radius: 50%;
+  background: rgba(180, 200, 90, 0.45);
+  z-index: 1;
+}
+
+.organic-blob::after {
+  content: "";
+  position: absolute;
+  right: -2mm;
+  top: 2mm;
+  width: 11mm;
+  height: 11mm;
+  border-radius: 50%;
+  background: rgba(180, 200, 90, 0.36);
+  z-index: 1;
+}
+
+.blob-circle-extra {
+  position: absolute;
+  right: 8mm;
+  bottom: -2.5mm;
+  width: 10mm;
+  height: 10mm;
+  border-radius: 50%;
+  background: rgba(10, 126, 58, 0.22);
+  z-index: 1;
+}
+
+.sheet-logo-img {
+  position: relative;
+  z-index: 2;
+  max-width: 50mm;
+  max-height: 25mm;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+/* Tema alternativo: Locar Clássico (Logo Colorida sobre fundo claro) */
+.a4-sheet.theme-locar .sheet-banner {
+  background: var(--locar-green);
+}
+
+.a4-sheet.theme-locar .organic-blob {
+  background: #f2f7f3;
+  border: 1.5px solid #cde2d2;
+  border-radius: 14px;
+  box-shadow: none;
+  margin-top: 3mm;
+  height: 30mm;
+}
+
+.a4-sheet.theme-locar .organic-blob::before,
+.a4-sheet.theme-locar .organic-blob::after,
+.a4-sheet.theme-locar .blob-circle-extra {
+  display: none;
+}
+
+.a4-sheet.theme-locar .footer-circles {
+  opacity: 0.55;
+}
+
+/* Bloco de Metadados à direita */
+.sheet-meta {
+  width: 96mm;
+  padding-top: 4.5mm;
+  font-size: 9.2pt;
+  line-height: 1.42;
+  color: #2b302c;
+}
+
+.meta-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 5.5px;
+  margin-bottom: 1.5px;
+}
+
+.meta-icon {
+  width: 12px;
+  height: 12px;
+  margin-top: 2px;
+  color: #363e37;
+  flex-shrink: 0;
+}
+
+.meta-label {
+  font-weight: 700;
+  color: #1f2421;
+}
+
+.meta-participants {
+  margin-top: 2px;
+  padding-left: 17.5px;
+  font-size: 8.7pt;
+  line-height: 1.35;
+}
+
+/* Corpo do Documento */
+.sheet-body {
+  padding: 2mm 16mm 18mm 16mm;
+  flex: 1;
+  position: relative;
+  z-index: 2;
+}
+
+.sheet-title {
+  text-align: center;
+  font-size: 15.5pt;
+  font-weight: 700;
+  color: #141715;
+  margin: 2mm 0 4.5mm;
+  letter-spacing: 0.1px;
+}
+
+/* Resumo Seção I */
+.summary-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 5mm;
+  margin-bottom: 4.5mm;
+  font-size: 10.2pt;
+  line-height: 1.44;
+  text-align: justify;
+}
+
+.summary-roman {
+  font-weight: 600;
+  min-width: 5mm;
+  flex-shrink: 0;
+}
+
+.summary-text {
+  flex: 1;
+}
+
+/* Principais Tópicos & Indicadores na Folha */
+.topics-box {
+  margin: 0 0 4.5mm 10mm;
+  padding: 2.5mm 3.5mm;
+  background: #f2f9f4;
+  border-left: 3.5px solid var(--locar-green);
+  border-radius: 0 4px 4px 0;
+  font-size: 8.6pt;
+  line-height: 1.35;
+}
+
+.a4-sheet.theme-locar .topics-box {
+  border-left-color: var(--locar-green);
+}
+
+.topics-box-title {
+  font-weight: 700;
+  font-size: 8.7pt;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--locar-green-dark);
+  margin-bottom: 1.5mm;
+}
+
+.a4-sheet.theme-locar .topics-box-title {
+  color: var(--locar-green-dark);
+}
+
+.topic-line {
+  margin-bottom: 1mm;
+}
+
+.topic-line:last-child {
+  margin-bottom: 0;
+}
+
+.topic-area {
+  font-weight: 700;
+  color: #1f2a22;
+}
+
+/* Faixa opcional de KPIs rápidos na folha */
+.sheet-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2mm;
+  margin: 0 0 4.5mm 10mm;
+}
+
+.sheet-kpi-item {
+  border: 1px solid #d7dfd7;
+  border-radius: 3px;
+  padding: 1.5mm 2.2mm;
+  background: #fbfdfb;
+}
+
+.sheet-kpi-label {
+  font-size: 7.3pt;
+  color: #556157;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.sheet-kpi-val {
+  font-size: 8.5pt;
+  font-weight: 700;
+  color: #1c241d;
+}
+
+/* Tabela do Plano de Ação — 4 Colunas idênticas à foto */
+.action-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1.5mm;
+  table-layout: fixed;
+}
+
+.action-table col.col-action {
+  width: 38%;
+}
+.action-table col.col-owner {
+  width: 21%;
+}
+.action-table col.col-deadline {
+  width: 18%;
+}
+.action-table col.col-status {
+  width: 23%;
+}
+
+.action-table thead th {
+  text-align: left;
+  font-size: 10pt;
+  font-weight: 700;
+  color: #141715;
+  padding: 2mm 2.5mm 2.2mm;
+  border-bottom: 1.2px solid #59605a;
+}
+
+.action-table tbody td {
+  vertical-align: top;
+  font-size: 9.2pt;
+  line-height: 1.33;
+  color: #1f2421;
+  padding: 2.8mm 2.5mm;
+  border-bottom: 0.8px solid #8a908a;
+  border-right: 0.8px solid #8a908a;
+  word-wrap: break-word;
+  white-space: pre-line;
+}
+
+.action-table tbody td:last-child {
+  border-right: none;
+}
+
+.action-table tbody tr.blank-paper-row td {
+  height: 10.5mm;
+  border-bottom: 0.8px dashed #9da39d;
+}
+
+.action-table tbody tr {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+/* Densidade Compacta para caber 10+ ações em 1 folha A4 perfeitamente */
+.a4-sheet.density-compact .sheet-banner {
+  height: 8mm;
+}
+
+.a4-sheet.density-compact .sheet-header {
+  min-height: 31mm;
+  padding-top: 2.5mm;
+}
+
+.a4-sheet.density-compact .logo-organic-container {
+  margin-top: 0.5mm;
+}
+
+.a4-sheet.density-compact .organic-blob {
+  height: 28.5mm;
+  width: 63mm;
+}
+
+.a4-sheet.density-compact .sheet-logo-img {
+  max-width: 46mm;
+  max-height: 22mm;
+}
+
+.a4-sheet.density-compact .sheet-meta {
+  padding-top: 2.5mm;
+  font-size: 8.4pt;
+  line-height: 1.28;
+}
+
+.a4-sheet.density-compact .meta-participants {
+  font-size: 7.9pt;
+  line-height: 1.22;
+}
+
+.a4-sheet.density-compact .sheet-body {
+  padding: 0.5mm 14mm 12mm 14mm;
+}
+
+.a4-sheet.density-compact .sheet-title {
+  font-size: 13.5pt;
+  margin: 0.5mm 0 2.5mm;
+}
+
+.a4-sheet.density-compact .summary-block {
+  font-size: 8.7pt;
+  line-height: 1.28;
+  margin-bottom: 2mm;
+}
+
+.a4-sheet.density-compact .topics-box {
+  margin-bottom: 2mm;
+  padding: 1.5mm 2.8mm;
+  font-size: 7.8pt;
+  line-height: 1.22;
+}
+
+.a4-sheet.density-compact .sheet-kpis {
+  margin-bottom: 2mm;
+}
+
+.a4-sheet.density-compact .action-table thead th {
+  font-size: 8.9pt;
+  padding: 1.2mm 2mm;
+}
+
+.a4-sheet.density-compact .action-table tbody td {
+  font-size: 8.05pt;
+  line-height: 1.2;
+  padding: 1.3mm 2mm;
+}
+
+.a4-sheet.density-compact .action-table tbody tr.blank-paper-row td {
+  height: 6.2mm;
+}
+
+.a4-sheet.density-compact .sheet-footer {
+  height: 11.5mm;
+}
+
+.a4-sheet.density-compact .footer-label {
+  font-size: 8.8pt;
+}
+
+/* Rodapé e grafismo do canto inferior direito */
+.sheet-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 14mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.footer-label {
+  font-size: 9.5pt;
+  color: #4b524c;
+  letter-spacing: 0.2px;
+  pointer-events: auto;
+}
+
+.footer-circles {
+  position: absolute;
+  right: -4mm;
+  bottom: -5mm;
+  width: 44mm;
+  height: 36mm;
+  pointer-events: none;
+}
+
+.fc-1 {
+  position: absolute;
+  right: 4mm;
+  bottom: 0;
+  width: 28mm;
+  height: 28mm;
+  border-radius: 50%;
+  background: rgba(10, 126, 58, 0.44);
+}
+
+.fc-2 {
+  position: absolute;
+  right: -2mm;
+  bottom: 12mm;
+  width: 19mm;
+  height: 19mm;
+  border-radius: 50%;
+  background: rgba(180, 200, 90, 0.52);
+}
+
+.fc-3 {
+  position: absolute;
+  right: 22mm;
+  bottom: -4mm;
+  width: 18mm;
+  height: 18mm;
+  border-radius: 50%;
+  background: rgba(10, 126, 58, 0.24);
+}
+
+[contenteditable="true"]:hover {
+  outline: 1px dashed rgba(10, 126, 58, 0.35);
+  outline-offset: 2px;
+}
+
+[contenteditable="true"]:focus {
+  outline: 1.5px solid var(--locar-green);
+  outline-offset: 2px;
+  background: rgba(235, 247, 238, 0.45);
+}
+
+/* Toast Notification */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #1b3b24;
+  color: #ffffff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.2s ease;
+  z-index: 99;
+  pointer-events: none;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.hint {
+  font-size: 11.5px;
+  color: var(--ui-muted);
+  line-height: 1.4;
+  margin: 4px 0 0;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+/* -------------------- Responsive -------------------- */
+@media (max-width: 1120px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
+  }
+  .editor-panel {
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--ui-border);
+  }
+  .preview-panel {
+    height: auto;
+  }
+}
+
+/* -------------------- Print / PDF Exact A4 Rules -------------------- */
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@media print {
+  html,
+  body {
+    width: 210mm;
+    height: 297mm;
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+  }
+
+  .topbar,
+  .editor-panel,
+  .preview-toolbar,
+  .toast {
+    display: none !important;
+  }
+
+  .workspace {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+
+  .preview-panel {
+    display: block;
+    background: #ffffff;
+    overflow: visible;
+    height: auto;
+  }
+
+  .preview-scroll {
+    padding: 0;
+    overflow: visible;
+    display: block;
+  }
+
+  .sheet-wrapper {
+    transform: none !important;
+  }
+
+  .a4-sheet {
+    box-shadow: none;
+    margin: 0;
+    width: 210mm;
+    min-height: 297mm;
+  }
+
+  [contenteditable="true"]:hover,
+  [contenteditable="true"]:focus {
+    outline: none !important;
+    background: transparent !important;
+  }
+}

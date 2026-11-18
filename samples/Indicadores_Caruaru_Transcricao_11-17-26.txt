@@ -1,0 +1,64 @@
+Indicadores Caruaru-20261117_091108-Transcrição da Reunião
+17 de novembro de 2026, 09:00
+Duração: 1h 21m 12s
+
+Jessica Gomes   0:03
+Que seria essa Panorama do mês, então no contrato de Caruaru, no mês de outubro, fechamos com 648 funcionários. Tivemos 16 admitidos no mês de outubro, 11 foram desligados (8 agentes de limpeza, 2 motoristas e 1 operador de retro), turnover de 12 meses em 22% (2º lugar entre filiais de grande porte). Trabalhando hoje está na faixa de 75%, pois temos 95 afastados e 64 pessoas em férias. Projeção de fechar dezembro com 666 colaboradores.
+
+Belisario   3:36
+Em relação às capinas, estou com um quadro defasado ainda: tenho 48 agentes na capina, quando era para ter 80. Muita desistência no período de experiência e atestado médico.
+
+Vivian Rodrigues   4:58
+Na coleta estamos no limite; com muitos atestados e faltas não temos reservas suficientes. Estamos trabalhando com pessoa do RH para melhorar a seleção.
+
+Carolina Buarque   6:56
+Vocês já estão com acesso ao hub de atestados? Ele faz auditoria prévia em tempo real e identifica atestados fraudados ou copiados.
+
+Marcela Teixeira   8:06
+Importante conversarem com o setor de segurança e com Ana Paula para olharem o hub de atestados. Também precisamos atuar nas faltas não justificadas com advertências, suspensões e alinhamento com jurídico para justa causa. Vou conversar com Laet e Ana Paula para apoiar o contrato.
+
+Belisario   10:29
+Sobre os 95 afastados, cerca de 50% são casos antigos do início do contrato (2010, 2014, 2018) em auxílio-doença ou aposentadoria. Estou com Ana Paula fazendo levantamento e auditoria para atualizar esse quantitativo.
+
+Jessica Gomes   11:22
+Fechando indicador de pessoal, plano de ação: verificação dos afastados com Ana Paula, Marcela e Laet; RH do contrato atuar nas admissões para recompor quadro defasado; e implantação do acompanhamento pelo Hub de Atestados até a próxima reunião.
+Seguindo para horas extras: fechamos com 3.631 horas (R$ 73 mil pagos em folha; 407 ocorrências acima de 2h/dia). Acumulado do ano em 33.378 horas (R$ 708 mil). Caruaru está em 1º lugar em horas extras por colaborador entre filiais de grande porte. Ranking liderado por Robson Williams (51h), Gabriel Melo (abastecimento/almoxarifado) e encarregado da noite.
+
+Vitor Arruda   16:09
+Seria importante fazer conta e avaliar cenários para Gabriel no abastecimento (dividir por mais de uma pessoa ou avaliar escala 12x36 como sugerido por Cristiane Santos). Vivian conversar com Ezequias para apresentar cenários.
+
+Clécio Rodrigues   20:15
+Sugiro definir uma meta/limite de horas extras por contrato para sair da reunião já com justificativa e plano de ação caso estoure.
+
+Cristiane Santos   23:43
+Sugiro incluir nos indicadores o comparativo entre o quadro exigido pela prefeitura/licitação e o quadro atual. Vitor e Daniel concordam em incorporar futuramente.
+
+Jessica Gomes   25:09
+Atestados: fechamos outubro com 2,41% de absenteísmo (275 atestados entregues por 142 pessoas, custo de R$ 21,9 mil, alerta de 10 pessoas próximas ao INSS; acumulado do ano 2,1% / 2.163 atestados / R$ 195 mil; 2º lugar). Destaques: Elizângela Silva (20 dias) e José Lucas. Belisario informa que já monitora Elizângela (entrará de férias e volta em janeiro) e José Ferraz (aviso prévio em dezembro).
+
+Jessica Gomes   27:27
+Faltas: taxa de 1,62% (269 faltas, média 62 pessoas, desconto de R$ 20 mil; acumulado 2.672 faltas / R$ 218 mil; 2º lugar). Segurança do Trabalho: 2 acidentes em outubro (taxa de frequência 16,7; acumulado 18 acidentes / 94 dias perdidos; 3º lugar).
+Combustível: R$ 406.800 (+12% vs setembro), 53.057 L de diesel, preço médio R$ 7,46 (+5,5%), consumo médio 2,19 km/L (2º lugar). Aumento pelo maior uso externo do Shellbox em 2 postos distantes (São Rafael e JH). Daniele Torres vai verificar novamente a possibilidade de credenciar o posto Shell na Av. José Rodrigues de Jesus (contato com Belisario/Ezequias).
+
+Jessica Gomes   36:16
+Manutenção: custo oficina R$ 60.400 (+49%), 90 quebras reais, MTTR 1,9h (1h54min), MTBF 13,4 (média 13 dias entre quebras), disponibilidade de frota 86,3% (Romario de Moura). Custo por KM R$ 0,46 (2º lugar).
+Pneus: CPK 0,070 (menor CPK entre filiais), 13 recapagens (R$ 19 mil); acumulado 124 recapagens (R$ 123 mil) e 111 pneus baixados.
+
+Vivian Rodrigues   39:12
+Estamos com 2 veículos parados por falta de pneu, 15 pneus retidos na renovadora La Corte aguardando quitação/comprovante, falta de material hidráulico no fornecedor Jorge Ricardo, 6 a 7 caixas estacionárias danificadas precisando de chapas e bloqueio na aferição de tacógrafo (risco de multa na PRF).
+
+Clécio Rodrigues & Carlos Buarque Filho & Vitor Arruda & Arthur Borella   40:41
+Os 4 fornecedores de pneus estão travados por questões financeiras decorrentes de atraso na certidão (PGFN); Carlos Filho e financeiro preveem pagamento de pneus entre amanhã e quinta-feira para entrega até início da próxima semana. Vitor reforça para colocar todas as prioridades (pneus, 15 pneus La Corte, hidráulico Jorge Ricardo, chapas MR, tacógrafo) na planilha do SharePoint. Arthur informa que La Corte teve pagamento parcial e pedirá para Lu enviar os saldos/comprovantes assim que quitados. Clécio explica que a MR reduziu o limite de crédito para R$ 50 mil (compras precisam de adiantamento à vista).
+
+Jessica Gomes   56:14
+Compras: R$ 145 mil (-7%), 13 fornecedores, maiores itens pneus e óleo hidráulico. Clécio destaca aumento de 100% no ano em lubrificantes (óleo 68 de R$ 12 para R$ 24/L, 15W40 de R$ 22 para R$ 45/L e Euro 6 a R$ 114/L).
+Ouvidoria: 1 manifestação fora do prazo e 2 ouvidorias em aberto no BI (bairro Gonçalves Ferreira); acumulado 67 manifestações com 98,6% no prazo. Mônica Guerra pedirá a Laís os números das 2 ouvidorias em aberto para passar para Vivian.
+
+Jessica Gomes   1:01:06
+Operação: abertura no Inlog pelos motoristas em 71% (4º lugar; piores setores: feiras); cobertura mapa de execução em 90% (4º lugar). Retomar reuniões com tráfego para melhorar abertura no Inlog e Vivian vai verificar os setores de feira. Pesagem: 8.310 t (268 t/dia, R$ 2 milhões; acumulado 83.302 t, -11% pela saída de grandes geradores/condomínios; 3º lugar).
+
+Jessica Gomes   1:05:38
+DRO (prévia fechamento 13/11): Receita R$ 4,86 milhões, Custo total R$ 4,53 milhões, Resultado R$ 327 mil (margem 6,7%; 2º lugar). Acumulado do ano: Receita R$ 46,86M, Custo R$ 42,74M, Saldo R$ 4,11M (margem 8,7%). Estouro em ferramentas e insumos operacionais (R$ 711 mil vs R$ 365 mil previsto) e diesel. Clécio confirma que os 100 contêineres de 1000L faturados na Contemar chegam amanhã (18/11).
+
+Vitor Arruda   1:10:03
+Disparar ainda em novembro o planejamento orçamentário do 1º trimestre de 2027 (tiros mais curtos até março/2027 para maior assertividade em diesel, FGTS consignado e receitas) junto com Daniel Cabral, Pedro Vitor, Vivian e Belisario.

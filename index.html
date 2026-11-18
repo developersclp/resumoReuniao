@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LOCAR — Gerador de Ata de Indicadores &amp; Plano de Ação (Microsoft Teams)</title>
+  <link rel="icon" type="image/png" href="assets/logo-locar.png" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- Barra Superior Institucional -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <img id="topbarLogo" src="assets/logo-locar.png" alt="LOCAR Gestão de Resíduos" class="topbar-logo" />
+      <div class="topbar-title-group">
+        <span class="topbar-title">Ata de Reunião de Indicadores &amp; Plano de Ação</span>
+        <span class="topbar-subtitle">DIE – Departamento de Inteligência Estratégica • Integração Microsoft Teams</span>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <select id="selPreset" class="preset-select" title="Selecionar reunião carregada"></select>
+
+      <button type="button" id="btnImportJson" class="btn btn-outline" title="Abrir arquivo JSON salvo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Abrir
+      </button>
+      <input type="file" id="inpImportJson" accept=".json" hidden />
+
+      <button type="button" id="btnExportJson" class="btn btn-outline" title="Salvar rascunho da ata em JSON">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Salvar JSON
+      </button>
+
+      <button type="button" id="btnExportWord" class="btn btn-secondary" title="Baixar ata editável em Word (.doc)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Exportar Word
+      </button>
+
+      <button type="button" id="btnPrintPdf" class="btn btn-primary" title="Imprimir ou Salvar em PDF (Formato A4)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Imprimir / PDF (A4)
+      </button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <!-- Painel Esquerdo: Upload, Análise e Edição -->
+    <aside class="editor-panel">
+      <nav class="tabs" aria-label="Etapas de geração">
+        <button type="button" class="tab-btn active" data-tab="tab-files">1. Arquivos</button>
+        <button type="button" class="tab-btn" data-tab="tab-header">2. Resumo</button>
+        <button type="button" class="tab-btn" data-tab="tab-actions">3. Ações</button>
+        <button type="button" class="tab-btn" data-tab="tab-layout">4. Layout</button>
+      </nav>
+
+      <!-- Aba 1: Arquivos do Teams & Indicadores -->
+      <section id="tab-files" class="tab-content active">
+        <div class="panel-section">
+          <h3 class="section-title">1. Relatório de Presença (Teams)</h3>
+          <div id="dropAttendance" class="dropzone">
+            <strong>Subir CSV de Presença do Teams</strong>
+            <span>Arraste ou clique aqui (.csv / .tsv) — extrai data, hora, contrato e participantes</span>
+            <input type="file" id="fileAttendance" accept=".csv,.tsv,.txt" hidden />
+          </div>
+          <div id="attendanceStatus" class="file-status"></div>
+        </div>
+
+        <div class="panel-section">
+          <h3 class="section-title">2. Transcrição da Reunião (Teams)</h3>
+          <div id="dropTranscript" class="dropzone">
+            <strong>Subir Transcrição do Teams</strong>
+            <span>Suporta .txt, .vtt ou .docx exportados do Microsoft Teams</span>
+            <input type="file" id="fileTranscript" accept=".txt,.vtt,.docx" hidden />
+          </div>
+          <div id="transcriptStatus" class="file-status"></div>
+
+          <div class="field">
+            <label for="inpTranscriptPaste">Ou cole a transcrição do Teams abaixo:</label>
+            <textarea id="inpTranscriptPaste" rows="5" placeholder="Cole aqui a transcrição completa da reunião do Teams para gerar o resumo, tópicos e plano de ação..."></textarea>
+          </div>
+
+          <button type="button" id="btnAnalyzeTranscript" class="btn btn-primary" style="width:100%;">
+            Analisar Transcrição e Gerar Ata + Plano de Ação
+          </button>
+          <p class="hint">
+            O processamento funciona 100% no navegador (sem banco de dados). A coluna <b>Status</b> é gerada vazia para preenchimento manual no papel.
+          </p>
+        </div>
+
+        <div class="panel-section">
+          <h3 class="section-title">
+            <span>3. Indicadores da Reunião</span>
+            <button type="button" id="btnAddKpi" class="btn btn-outline btn-sm">+ Indicador</button>
+          </h3>
+          <div id="dropIndicators" class="dropzone">
+            <strong>Subir Planilha / CSV de Indicadores</strong>
+            <span>Opcional (.csv / .tsv com colunas Indicador; Valor; Status)</span>
+            <input type="file" id="fileIndicators" accept=".csv,.tsv,.json,.txt" hidden />
+          </div>
+          <div id="indicatorsStatus" class="file-status"></div>
+          <div id="kpiEditorList" class="kpi-editor-grid"></div>
+        </div>
+
+        <div class="panel-section">
+          <h3 class="section-title">Análise com IA (Opcional)</h3>
+          <div class="field" style="margin-bottom:0;">
+            <label for="inpGeminiKey">Chave API Gemini (deixe em branco para usar o analisador local)</label>
+            <input type="password" id="inpGeminiKey" placeholder="Opcional: AIza..." autocomplete="off" />
+          </div>
+        </div>
+      </section>
+
+      <!-- Aba 2: Cabeçalho, Resumo e Tópicos -->
+      <section id="tab-header" class="tab-content">
+        <div class="panel-section">
+          <h3 class="section-title">Cabeçalho da Reunião</h3>
+          <div class="field">
+            <label for="inpUnitName">Contrato / Filial (Faixa superior direita)</label>
+            <input type="text" id="inpUnitName" />
+          </div>
+          <div class="field">
+            <label for="inpLocal">Local</label>
+            <input type="text" id="inpLocal" />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="inpDateText">Data</label>
+              <input type="text" id="inpDateText" placeholder="17/11/2026 (Terça-Feira)" />
+            </div>
+            <div class="field">
+              <label for="inpTimeText">Hora</label>
+              <input type="text" id="inpTimeText" placeholder="09:00" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="inpParticipants">Participação</label>
+            <textarea id="inpParticipants" rows="4"></textarea>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h3 class="section-title">Título e Resumo Executivo (I.)</h3>
+          <div class="field">
+            <label for="inpTitle">Título da Ata</label>
+            <input type="text" id="inpTitle" placeholder="Ata de Reunião de Indicadores Outubro/2026" />
+          </div>
+          <div class="field">
+            <label for="inpSummary">Resumo da Reunião (Parágrafo I.)</label>
+            <textarea id="inpSummary" rows="6"></textarea>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h3 class="section-title">
+            <span>Principais Tópicos &amp; Assuntos</span>
+            <button type="button" id="btnAddTopic" class="btn btn-outline btn-sm">+ Tópico</button>
+          </h3>
+          <label class="checkbox-row">
+            <input type="checkbox" id="chkShowTopics" />
+            Destacar bloco de principais tópicos na ata impressa
+          </label>
+          <div id="topicsEditorList"></div>
+        </div>
+      </section>
+
+      <!-- Aba 3: Plano de Ação -->
+      <section id="tab-actions" class="tab-content">
+        <div class="panel-section">
+          <h3 class="section-title">
+            <span>Itens do Plano de Ação (<span id="actionCountBadge">0 itens</span>)</span>
+          </h3>
+          <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button type="button" id="btnAddAction" class="btn btn-primary btn-sm" style="flex:1;">+ Adicionar Item de Ação</button>
+            <button type="button" id="btnClearStatuses" class="btn btn-outline btn-sm" title="Garante coluna Status vazia para preencher no papel">Limpar Status</button>
+          </div>
+          <div id="actionsEditorList"></div>
+        </div>
+      </section>
+
+      <!-- Aba 4: Layout & Impressão -->
+      <section id="tab-layout" class="tab-content">
+        <div class="panel-section">
+          <h3 class="section-title">Personalização Visual Locar</h3>
+          <div class="field">
+            <label for="selHeaderTheme">Estilo do Timbrado</label>
+            <select id="selHeaderTheme">
+              <option value="die">DIE Oficial (Cores Vivas Locar — Verde Bandeira &amp; Lima)</option>
+              <option value="locar">Locar Claro (Fundo Branco c/ Logo Colorida)</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="selDensity">Densidade / Ajuste na Página A4</label>
+            <select id="selDensity">
+              <option value="auto">Automático (ajusta p/ caber em 1 página A4)</option>
+              <option value="normal">Normal (espaçamento amplo igual foto com poucos itens)</option>
+              <option value="compact">Compacto (ideal para 8 a 12 itens de ação)</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="inpBlankRows">Linhas extras em branco ao final (p/ anotações no papel)</label>
+            <input type="number" id="inpBlankRows" min="0" max="6" value="1" />
+          </div>
+
+          <label class="checkbox-row">
+            <input type="checkbox" id="chkShowKpis" />
+            Exibir grade de cartões de indicadores resumidos na folha
+          </label>
+
+          <div class="field" style="margin-top:12px;">
+            <label for="inpFooter">Texto do Rodapé</label>
+            <input type="text" id="inpFooter" />
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <!-- Painel Direito: Visualização em Tempo Real da Folha A4 -->
+    <section class="preview-panel">
+      <div class="preview-toolbar">
+        <span>Visualização A4 em tempo real • Você pode clicar diretamente no documento para editar qualquer texto</span>
+        <div class="zoom-controls">
+          <button type="button" id="btnZoomOut" class="btn btn-outline btn-sm">−</button>
+          <span id="zoomLabel" style="min-width:44px; text-align:center; font-weight:600;">88%</span>
+          <button type="button" id="btnZoomIn" class="btn btn-outline btn-sm">+</button>
+          <button type="button" id="btnZoomFit" class="btn btn-outline btn-sm">Ajustar</button>
+        </div>
+      </div>
+
+      <div id="previewScroll" class="preview-scroll">
+        <div id="sheetWrapper" class="sheet-wrapper">
+          <article id="a4Sheet" class="a4-sheet">
+            <!-- Faixa superior com nome da unidade à direita (encostada no topo) -->
+            <div class="sheet-banner">
+              <span id="sheetUnitName" class="sheet-unit-name" contenteditable="true">Caruaru</span>
+            </div>
+
+            <!-- Cabeçalho: Mancha orgânica com logo à esquerda + Metadados à direita -->
+            <header class="sheet-header">
+              <div class="logo-organic-container">
+                <div class="organic-blob">
+                  <span class="blob-circle-extra"></span>
+                  <img id="sheetLogoImg" src="assets/logo-locar-white.png" alt="LOCAR Gestão de Resíduos" class="sheet-logo-img" />
+                </div>
+              </div>
+
+              <div class="sheet-meta">
+                <div class="meta-row">
+                  <svg class="meta-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                  <div><span class="meta-label">Local:</span> <span id="sheetLocal" contenteditable="true">Microsoft Teams</span></div>
+                </div>
+                <div class="meta-row">
+                  <svg class="meta-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/></svg>
+                  <div><span class="meta-label">Data:</span> <span id="sheetDate" contenteditable="true">17/11/2026 (Terça-Feira)</span></div>
+                </div>
+                <div class="meta-row">
+                  <svg class="meta-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                  <div><span class="meta-label">Hora:</span> <span id="sheetTime" contenteditable="true">09:00</span></div>
+                </div>
+                <div class="meta-participants">
+                  <span class="meta-label">Participação:</span> <span id="sheetParticipants" contenteditable="true"></span>
+                </div>
+              </div>
+            </header>
+
+            <!-- Corpo Principal da Ata -->
+            <div class="sheet-body">
+              <h1 id="sheetTitle" class="sheet-title" contenteditable="true">Ata de Reunião de Indicadores Outubro/2026</h1>
+
+              <div class="summary-block">
+                <span class="summary-roman">I.</span>
+                <div id="sheetSummary" class="summary-text" contenteditable="true"></div>
+              </div>
+
+              <!-- Destaque dos Principais Tópicos e Assuntos -->
+              <div id="sheetTopicsBox" class="topics-box">
+                <div class="topics-box-title">Principais Tópicos e Assuntos Destacados</div>
+                <div id="sheetTopicsList"></div>
+              </div>
+
+              <!-- Cartões de Indicadores (opcional) -->
+              <div id="sheetKpis" class="sheet-kpis" style="display:none;"></div>
+
+              <!-- Tabela de Plano de Ação (4 colunas, Status vazio p/ papel) -->
+              <table class="action-table">
+                <colgroup>
+                  <col class="col-action" />
+                  <col class="col-owner" />
+                  <col class="col-deadline" />
+                  <col class="col-status" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>Itens de ação</th>
+                    <th>Proprietários</th>
+                    <th>Prazo</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="sheetActionBody"></tbody>
+              </table>
+            </div>
+
+            <!-- Rodapé Institucional DIE -->
+            <footer class="sheet-footer">
+              <span id="sheetFooter" class="footer-label" contenteditable="true">DIE – Departamento de Inteligência Estratégica</span>
+              <div class="footer-circles" aria-hidden="true">
+                <span class="fc-1"></span>
+                <span class="fc-2"></span>
+                <span class="fc-3"></span>
+              </div>
+            </footer>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/logo-data.js"></script>
+  <script src="js/default-data.js"></script>
+  <script src="js/parser-analyzer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
