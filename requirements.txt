@@ -1,0 +1,2 @@
+# LOCAR Gestão de Resíduos - Gerador de Atas
+# O sistema utiliza apenas módulos nativos da biblioteca padrão do Python 3 (http.server, socketserver, json, os, sys)
