@@ -54,8 +54,27 @@ def reconfigure_engine(database_url: str) -> None:
 def init_db() -> None:
     """Cria as tabelas caso ainda não existam."""
     from backend import models  # noqa: F401
+    from sqlalchemy.exc import IntegrityError, ProgrammingError
 
-    Base.metadata.create_all(bind=engine)
+    is_sqlite = engine.url.drivername.startswith("sqlite")
+    if not is_sqlite:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT pg_advisory_lock(847291038);"))
+            try:
+                Base.metadata.create_all(bind=conn)
+                conn.commit()
+            except (IntegrityError, ProgrammingError) as exc:
+                conn.rollback()
+                err_str = str(exc).lower()
+                if "already exists" in err_str or "unique constraint" in err_str or "pg_type" in err_str:
+                    pass
+                else:
+                    raise
+            finally:
+                conn.execute(text("SELECT pg_advisory_unlock(847291038);"))
+                conn.commit()
+    else:
+        Base.metadata.create_all(bind=engine)
 
 
 @contextmanager

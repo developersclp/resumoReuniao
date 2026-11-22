@@ -29,17 +29,37 @@ _BOOTSTRAPPED = False
 
 
 def bootstrap_database() -> None:
-    """Inicializa schema e carga inicial das 12 cidades/projetos de forma idempotente."""
+    """Inicializa schema e carga inicial das 12 cidades/projetos de forma idempotente e segura para multi-processos."""
     global _BOOTSTRAPPED
     with _BOOTSTRAP_LOCK:
         if _BOOTSTRAPPED:
             return
-        init_db()
-        db = SessionLocal()
-        try:
-            seed_initial_data(db)
-        finally:
-            db.close()
+
+        from sqlalchemy import text
+        from backend.database import engine
+
+        is_sqlite = engine.url.drivername.startswith("sqlite")
+        if not is_sqlite:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT pg_advisory_lock(938201948);"))
+                try:
+                    init_db()
+                    db = SessionLocal()
+                    try:
+                        seed_initial_data(db)
+                    finally:
+                        db.close()
+                finally:
+                    conn.execute(text("SELECT pg_advisory_unlock(938201948);"))
+                    conn.commit()
+        else:
+            init_db()
+            db = SessionLocal()
+            try:
+                seed_initial_data(db)
+            finally:
+                db.close()
+
         _BOOTSTRAPPED = True
 
 

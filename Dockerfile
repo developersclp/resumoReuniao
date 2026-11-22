@@ -23,4 +23,4 @@ ENV PORT=8080
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8080} --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile - server:app"]
+CMD ["sh", "-c", "gunicorn --preload --bind 0.0.0.0:${PORT:-8080} --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile - server:app"]
