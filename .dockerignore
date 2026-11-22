@@ -3,3 +3,9 @@
 samples
 *.bat
 README.md
+DEPLOY_RAILWAY.md
+data
+*.db
+*.sqlite*
+.pytest_cache
+tests
