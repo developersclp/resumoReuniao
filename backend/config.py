@@ -19,7 +19,9 @@ def get_database_url() -> str:
     url = (os.environ.get("LOCAR_DATABASE_URL") or os.environ.get("DATABASE_URL") or "").strip()
     if url:
         if url.startswith("postgres://"):
-            url = "postgresql://" + url[len("postgres://") :]
+            url = "postgresql+psycopg2://" + url[len("postgres://") :]
+        elif url.startswith("postgresql://") and not url.startswith("postgresql+"):
+            url = "postgresql+psycopg2://" + url[len("postgresql://") :]
         return url
     db_path = get_data_dir() / "locar_atas.db"
     return f"sqlite:///{db_path.as_posix()}"
