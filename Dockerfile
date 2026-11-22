@@ -1,11 +1,12 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
-    fonts-carlito \
     fonts-liberation \
     fonts-dejavu-core \
+    fonts-freefont-ttf \
     ca-certificates \
+    && (apt-get install -y --no-install-recommends fonts-carlito || true) \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
