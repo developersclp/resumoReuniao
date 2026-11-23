@@ -51,6 +51,43 @@ def reconfigure_engine(database_url: str) -> None:
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
+def ensure_connected_engine():
+    """Garante uma conexão válida com o banco, testando candidatos em caso de falha de autenticação."""
+    global engine, SessionLocal
+    import logging
+    from backend.config import get_database_url_candidates
+
+    logger = logging.getLogger("locar.database")
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1;"))
+        return engine
+    except Exception as exc:
+        err_msg = str(exc).lower()
+        if "password authentication failed" in err_msg or "authentication failed" in err_msg:
+            logger.warning(
+                "Falha de autenticação no banco com a URL padrão (%s). Testando URLs candidatas...",
+                engine.url.render_as_string(hide_password=True),
+            )
+            for cand in get_database_url_candidates():
+                try:
+                    test_eng = _build_engine(cand)
+                    with test_eng.connect() as conn:
+                        conn.execute(text("SELECT 1;"))
+                    logger.info(
+                        "Conexão estabelecida com sucesso usando URL candidata: %s",
+                        test_eng.url.render_as_string(hide_password=True),
+                    )
+                    engine.dispose()
+                    engine = test_eng
+                    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+                    return engine
+                except Exception:
+                    continue
+        raise
+
+
 def _ensure_schema_columns(conn) -> None:
     """Adiciona colunas novas de forma idempotente em bancos SQLite/PostgreSQL existentes."""
     inspector = inspect(conn)

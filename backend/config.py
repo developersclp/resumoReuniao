@@ -15,21 +15,48 @@ def get_data_dir() -> Path:
     return data_dir
 
 
+def get_database_url_candidates() -> list[str]:
+    """Retorna lista de URLs de banco de dados candidatas para conexão resiliente."""
+    raw_list: list[str] = []
+
+    # 1. DATABASE_URL do ambiente
+    db_env = os.environ.get("DATABASE_URL", "").strip().strip("'\"")
+    if db_env:
+        raw_list.append(db_env)
+
+    # 2. LOCAR_DATABASE_URL do ambiente
+    locar_env = os.environ.get("LOCAR_DATABASE_URL", "").strip().strip("'\"")
+    if locar_env and locar_env not in raw_list:
+        raw_list.append(locar_env)
+
+    # 3. DATABASE_PUBLIC_URL do ambiente
+    pub_env = os.environ.get("DATABASE_PUBLIC_URL", "").strip().strip("'\"")
+    if pub_env and pub_env not in raw_list:
+        raw_list.append(pub_env)
+
+    # 4. Fallback no Railway com credencial informada
+    if is_production():
+        railway_internal = "postgresql://postgres:JiFnNjDHMgDNQoxWxHVGoPXDQOBsLzmC@postgres.railway.internal:5432/railway"
+        if railway_internal not in raw_list:
+            raw_list.append(railway_internal)
+
+    normalized: list[str] = []
+    for u in raw_list:
+        if u.startswith("DATABASE_URL="):
+            u = u.split("=", 1)[1].strip().strip("'\"")
+        if u.startswith("postgres://"):
+            u = "postgresql+psycopg2://" + u[len("postgres://") :]
+        elif u.startswith("postgresql://") and not u.startswith("postgresql+"):
+            u = "postgresql+psycopg2://" + u[len("postgresql://") :]
+        if u and u not in normalized:
+            normalized.append(u)
+    return normalized
+
+
 def get_database_url() -> str:
-    # Prioriza DATABASE_URL (padrão oficial Railway/PaaS)
-    # com fallback para LOCAR_DATABASE_URL ou DATABASE_PUBLIC_URL.
-    url = (
-        os.environ.get("DATABASE_URL")
-        or os.environ.get("LOCAR_DATABASE_URL")
-        or os.environ.get("DATABASE_PUBLIC_URL")
-        or ""
-    ).strip().strip("'\"")
-    if url:
-        if url.startswith("postgres://"):
-            url = "postgresql+psycopg2://" + url[len("postgres://") :]
-        elif url.startswith("postgresql://") and not url.startswith("postgresql+"):
-            url = "postgresql+psycopg2://" + url[len("postgresql://") :]
-        return url
+    candidates = get_database_url_candidates()
+    if candidates:
+        return candidates[0]
     db_path = get_data_dir() / "locar_atas.db"
     return f"sqlite:///{db_path.as_posix()}"
 

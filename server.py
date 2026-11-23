@@ -36,11 +36,12 @@ def bootstrap_database() -> None:
             return
 
         from sqlalchemy import text
-        from backend.database import engine
+        from backend.database import engine, ensure_connected_engine
 
-        is_sqlite = engine.url.drivername.startswith("sqlite")
+        eng = ensure_connected_engine()
+        is_sqlite = eng.url.drivername.startswith("sqlite")
         if not is_sqlite:
-            with engine.connect() as conn:
+            with eng.connect() as conn:
                 conn.execute(text("SELECT pg_advisory_lock(938201948);"))
                 try:
                     init_db()
