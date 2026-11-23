@@ -317,12 +317,16 @@
         <div class="city-card-top">
           <div class="city-card-identity">
             <div class="city-logo-thumb">${thumbHtml}</div>
-            <div>
+            <div class="city-card-headings">
               <h3 class="city-card-title">${escapeHtml(c.name)}${c.state_uf ? " — " + escapeHtml(c.state_uf) : ""}</h3>
               <div class="city-card-sub">${escapeHtml(c.project_name)}</div>
             </div>
           </div>
+        </div>
+
+        <div class="city-card-status-row">
           <span class="status-badge ${escapeAttr(st)}">${escapeHtml(stLabel)}</span>
+          <span class="city-card-period">${lm ? escapeHtml(lm.reference_label || lm.date_text || "—") : "Sem ata"}</span>
         </div>
 
         <div class="city-card-summary">
