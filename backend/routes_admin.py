@@ -523,6 +523,25 @@ def auth_change_password():
     return jsonify({"ok": True, "message": "Senha alterada com sucesso."}), 200
 
 
+@admin_bp.route("/admin/reset-operational-data", methods=["POST"])
+@require_admin
+def reset_operational_data():
+    """Remove todas as reuniões, ações, versões PDF, links e consentimentos, preservando apenas as 12 cidades e usuários."""
+    from backend.models import AuditLog, ConsentRecord, PublicLink, MeetingVersion, ActionItem, MeetingIndicator, Meeting
+    g.db.query(AuditLog).delete()
+    g.db.query(ConsentRecord).delete()
+    g.db.query(PublicLink).delete()
+    g.db.query(MeetingVersion).delete()
+    g.db.query(ActionItem).delete()
+    g.db.query(MeetingIndicator).delete()
+    g.db.query(Meeting).delete()
+    g.db.commit()
+    return jsonify({
+        "ok": True,
+        "message": "Todos os dados operacionais foram removidos com sucesso. O sistema está pronto para uso inicial.",
+    }), 200
+
+
 @admin_bp.route("/admin/users", methods=["GET"])
 @require_admin
 def list_admin_users():

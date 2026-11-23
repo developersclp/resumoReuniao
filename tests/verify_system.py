@@ -93,11 +93,49 @@ def run_all_tests() -> None:
         actual_names = [entry["city"]["name"] for entry in dash["cities"]]
         assert actual_names == expected_official_names, f"Ordem/nomes das 12 cidades divergem: {actual_names}"
 
+        # Validação do estado inicial 100% limpo: todas as 12 cidades sem reuniões
+        for entry in dash["cities"]:
+            assert entry["latest_meeting"] is None, f"Cidade {entry['city']['name']} não deve ter reuniões no estado inicial limpo"
+            assert entry["meetings_count"] == 0
+            assert entry["pending_actions"] == 0
+
         caruaru_entry = next(c for c in dash["cities"] if c["city"]["slug"] == "caruaru")
         vitoria_entry = next(c for c in dash["cities"] if c["city"]["slug"] == "vitoria-de-santo-antao")
         caruaru_id = caruaru_entry["city"]["id"]
-        caruaru_meeting_id = caruaru_entry["latest_meeting"]["id"]
-        vitoria_meeting_id = vitoria_entry["latest_meeting"]["id"]
+        vitoria_id = vitoria_entry["city"]["id"]
+
+        # Cria primeira reunião de teste para Caruaru
+        r_create_car = client.post(
+            f"/api/cities/{caruaru_id}/meetings",
+            json={
+                "reference_month": "2026-10",
+                "reference_label": "Outubro/2026",
+                "date_text": "17/11/2026 (Terça-Feira)",
+                "title": "Ata de Reunião de Indicadores Outubro/2026",
+                "actions": [
+                    {"action": "Auditoria e levantamento dos 95 afastados", "owner": "Belisario e RH", "deadline": "Próx. Reunião"},
+                    {"action": "Implantar acompanhamento no Hub de Atestados", "owner": "Vivian e RH", "deadline": "Próx. Reunião"},
+                ],
+            },
+        )
+        assert r_create_car.status_code == 201, r_create_car.get_data(as_text=True)
+        caruaru_meeting_id = r_create_car.get_json()["meeting"]["id"]
+
+        # Cria primeira reunião de teste para Vitória de Santo Antão
+        r_create_vit = client.post(
+            f"/api/cities/{vitoria_id}/meetings",
+            json={
+                "reference_month": "2026-10",
+                "reference_label": "Outubro/2026",
+                "date_text": "23/12/2026",
+                "title": "Ata de Reunião de Indicadores Outubro/2026 - Vitória",
+                "actions": [
+                    {"action": "Ofício à prefeitura ref ao aumento do Diesel", "owner": "Alison e Laet", "deadline": "Próx. Reunião"},
+                ],
+            },
+        )
+        assert r_create_vit.status_code == 201, r_create_vit.get_data(as_text=True)
+        vitoria_meeting_id = r_create_vit.get_json()["meeting"]["id"]
 
         logo_url = make_test_logo_data_url((10, 126, 58, 255))
         report_logo_url = make_test_logo_data_url((21, 101, 192, 255))

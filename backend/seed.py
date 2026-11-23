@@ -8,7 +8,16 @@ import unicodedata
 from sqlalchemy.orm import Session
 
 from backend.config import get_admin_seed_config
-from backend.models import ActionItem, AdminUser, City, Meeting, MeetingIndicator
+from backend.models import (
+    ActionItem,
+    AdminUser,
+    City,
+    ConsentRecord,
+    Meeting,
+    MeetingIndicator,
+    MeetingVersion,
+    PublicLink,
+)
 from backend.security import hash_password
 
 logger = logging.getLogger("locar.seed")
@@ -313,15 +322,11 @@ def seed_initial_data(db: Session) -> None:
 
     existing_cities = db.query(City).order_by(City.display_order, City.created_at).all()
     if len(existing_cities) == 0:
-        created_by_slug: dict[str, City] = {}
         for spec in OFFICIAL_CITIES:
             city = _build_city_record(spec)
             db.add(city)
-            created_by_slug[spec["slug"]] = city
         db.flush()
-
-        _create_meeting_from_preset(db, created_by_slug["caruaru"], CARUARU_PRESET, admin_user.id)
-        _create_meeting_from_preset(db, created_by_slug["vitoria-de-santo-antao"], VITORIA_PRESET, admin_user.id)
+        logger.info("12 Cidades oficiais do Grupo LOCAR cadastradas com sucesso para uso inicial limpo.")
     else:
         # Sincroniza de forma idempotente bancos que tinham placeholders (Cidade / Projeto 03..12)
         by_slug = {c.slug: c for c in existing_cities}
@@ -368,5 +373,22 @@ def seed_initial_data(db: Session) -> None:
                 db.flush()
                 by_slug[new_city.slug] = new_city
                 by_norm_name[_norm_city_name(new_city.name)] = new_city
+
+    # Limpeza de demonstrações pré-existentes (deixando o sistema 100% limpo com apenas as 12 cidades)
+    demo_titles = [
+        "Ata de Reunião de Indicadores Outubro/2026",
+        "Ata de Reunião de Indicadores Abril/2026",
+    ]
+    demo_meetings = db.query(Meeting).filter(Meeting.title.in_(demo_titles)).all()
+    if demo_meetings:
+        demo_ids = [m.id for m in demo_meetings]
+        db.query(ConsentRecord).filter(ConsentRecord.meeting_id.in_(demo_ids)).delete(synchronize_session=False)
+        db.query(PublicLink).filter(PublicLink.meeting_id.in_(demo_ids)).delete(synchronize_session=False)
+        db.query(MeetingVersion).filter(MeetingVersion.meeting_id.in_(demo_ids)).delete(synchronize_session=False)
+        db.query(ActionItem).filter(ActionItem.meeting_id.in_(demo_ids)).delete(synchronize_session=False)
+        db.query(MeetingIndicator).filter(MeetingIndicator.meeting_id.in_(demo_ids)).delete(synchronize_session=False)
+        db.query(Meeting).filter(Meeting.id.in_(demo_ids)).delete(synchronize_session=False)
+        db.flush()
+        logger.info("Reuniões de demonstração/preset removidas: sistema 100% limpo.")
 
     db.commit()

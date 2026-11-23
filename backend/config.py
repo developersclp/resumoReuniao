@@ -34,11 +34,15 @@ def get_database_url_candidates() -> list[str]:
     if pub_env and pub_env not in raw_list:
         raw_list.append(pub_env)
 
-    # 4. Fallback no Railway com credencial informada
+    # 4. Fallback no Railway com credenciais informadas para auto-recuperação
     if is_production():
-        railway_internal = "postgresql://postgres:JiFnNjDHMgDNQoxWxHVGoPXDQOBsLzmC@postgres.railway.internal:5432/railway"
-        if railway_internal not in raw_list:
-            raw_list.append(railway_internal)
+        railway_candidates = [
+            "postgresql://postgres:PxfOmuUCCsufgTMblgawBLNXbkaBCljq@postgres.railway.internal:5432/railway",
+            "postgresql://postgres:JiFnNjDHMgDNQoxWxHVGoPXDQOBsLzmC@postgres.railway.internal:5432/railway",
+        ]
+        for rc in railway_candidates:
+            if rc not in raw_list:
+                raw_list.append(rc)
 
     normalized: list[str] = []
     for u in raw_list:
