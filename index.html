@@ -3,19 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Grupo LOCAR — Gestão de Atas das 12 Cidades/Projetos &amp; Consentimento</title>
+  <title>LOCAR — Atas &amp; Plano de Ação</title>
   <link rel="icon" type="image/png" href="assets/logo-locar.png" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
-  <!-- Tela de Autenticação Administrativa LOCAR -->
+  <!-- Login -->
   <section id="loginScreen" class="login-screen">
     <div class="login-card">
       <div class="login-brand">
-        <img id="loginLogoImg" src="assets/logo-locar.png" alt="LOCAR Gestão de Resíduos" />
+        <img id="loginLogoImg" src="assets/logo-locar.png" alt="LOCAR" />
         <div>
-          <h1>Painel Administrativo LOCAR</h1>
-          <p>DIE – Departamento de Inteligência Estratégica</p>
+          <h1>LOCAR — Atas &amp; Plano de Ação</h1>
         </div>
       </div>
 
@@ -23,82 +22,64 @@
 
       <form id="loginForm">
         <div class="field">
-          <label for="loginEmail">E-mail administrativo</label>
+          <label for="loginEmail">E-mail</label>
           <input type="text" id="loginEmail" autocomplete="username" placeholder="admin@locar.srv.br" required />
         </div>
         <div class="field">
           <label for="loginPassword">Senha</label>
           <input type="password" id="loginPassword" autocomplete="current-password" placeholder="••••••••" required />
         </div>
-        <button type="submit" id="btnLoginSubmit" class="btn btn-primary" style="width:100%; margin-top:4px;">
-          Entrar no Painel LOCAR
+        <button type="submit" id="btnLoginSubmit" class="btn btn-primary" style="width:100%; margin-top:6px;">
+          Entrar
         </button>
       </form>
-
-      <div class="login-note">
-        <strong>Acesso exclusivo para administradores da LOCAR.</strong><br />
-        Os representantes das cidades não precisam de login ou senha: eles acessam e confirmam as atas diretamente pelo link público individual enviado pela LOCAR.
-      </div>
     </div>
   </section>
 
-  <!-- Aplicação Administrativa Completa (Exibida após autenticação) -->
+  <!-- Aplicação Principal -->
   <div id="appShell" class="app-shell hidden">
-    <!-- Barra Superior Institucional -->
     <header class="topbar">
-      <div class="topbar-brand">
-        <img id="topbarLogo" src="assets/logo-locar.png" alt="LOCAR Gestão de Resíduos" class="topbar-logo" />
-        <div class="topbar-title-group">
-          <span class="topbar-title">Grupo LOCAR — Atas de Indicadores &amp; Plano de Ação</span>
-          <span class="topbar-subtitle">DIE – Departamento de Inteligência Estratégica • 12 Cidades / Projetos de Limpeza</span>
-        </div>
+      <div class="topbar-brand" id="topbarHomeBtn" style="cursor:pointer;">
+        <img id="topbarLogo" src="assets/logo-locar.png" alt="LOCAR" class="topbar-logo" />
+        <span class="topbar-title">LOCAR • Atas &amp; Plano de Ação</span>
       </div>
 
       <nav class="topbar-nav" aria-label="Navegação principal">
-        <button type="button" class="nav-pill active" data-view="dashboard">Dashboard Geral</button>
-        <button type="button" class="nav-pill" data-view="city-history">Histórico da Cidade</button>
-        <button type="button" class="nav-pill" data-view="editor">Editor da Ata (A4)</button>
-        <button type="button" class="nav-pill" data-view="cities">Cidades / Projetos</button>
+        <button type="button" class="nav-pill active" data-view="dashboard">1. Cidades</button>
+        <button type="button" class="nav-pill" data-view="city-history">2. Reuniões / Histórico</button>
+        <button type="button" class="nav-pill" data-view="editor">3. Relatório</button>
       </nav>
 
       <div class="topbar-right">
-        <div class="city-global-picker" title="Alternar entre as 12 cidades/projetos do Grupo LOCAR">
-          <label for="globalCitySelect">Cidade/Projeto:</label>
+        <div class="city-global-picker">
+          <label for="globalCitySelect">Cidade:</label>
           <select id="globalCitySelect" class="city-global-select"></select>
         </div>
 
         <span id="adminUserLabel" class="admin-badge-user"></span>
-        <button type="button" id="btnOpenAdminModal" class="btn btn-outline btn-sm" title="Gerenciar administradores e senha">Administradores</button>
+        <button type="button" id="btnOpenAdminModal" class="btn btn-outline btn-sm">Usuários</button>
         <button type="button" id="btnLogout" class="btn btn-outline btn-sm">Sair</button>
       </div>
     </header>
 
-    <!-- VISÃO 1: Dashboard Geral do Grupo LOCAR -->
+    <!-- VISÃO 1: Selecionar Cidade -->
     <section id="view-dashboard" class="view-panel">
       <div class="page-container">
         <div class="page-header-row">
-          <div>
-            <h2>Dashboard Geral — Grupo LOCAR (Cidades / Projetos de Limpeza)</h2>
-            <p>Acompanhamento consolidado das 12 cidades/projetos, situação das atas mensais, consentimentos e pendências.</p>
-          </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button type="button" id="btnDashNewCity" class="btn btn-outline btn-sm">+ Nova Cidade / Projeto</button>
-            <button type="button" id="btnDashRefresh" class="btn btn-secondary btn-sm">Atualizar Painel</button>
-          </div>
+          <h2>Selecione a Cidade</h2>
+          <button type="button" id="btnDashNewCity" class="btn btn-primary btn-sm">+ Nova Cidade</button>
         </div>
 
-        <div id="dashboardKpis" class="kpi-summary-strip"></div>
-
         <div class="filter-toolbar">
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; flex:1;">
-            <input type="text" id="dashSearchInput" placeholder="Buscar por nome da cidade, projeto ou código..." style="min-width:260px; flex:1; max-width:420px;" />
+          <div class="filter-toolbar-inputs">
+            <input type="text" id="dashSearchInput" placeholder="Buscar cidade ou código..." />
             <select id="dashStatusFilter">
-              <option value="">Todas as situações</option>
-              <option value="aguardando_envio">Aguardando envio</option>
+              <option value="">Todas</option>
+              <option value="aguardando_envio">Em edição</option>
               <option value="link_enviado">Link enviado</option>
               <option value="aguardando_confirmacao">Aguardando confirmação</option>
               <option value="confirmada">Confirmada</option>
-              <option value="link_invalido">Link expirado ou invalidado</option>
+              <option value="link_invalido">Link expirado</option>
             </select>
           </div>
           <span class="hint" id="dashCountHint"></span>
@@ -108,28 +89,23 @@
       </div>
     </section>
 
-    <!-- VISÃO 2: Histórico e Acompanhamento da Cidade Selecionada -->
+    <!-- VISÃO 2: Reuniões e Plano de Ação da Cidade -->
     <section id="view-city-history" class="view-panel hidden">
       <div class="page-container">
         <div id="cityHistoryHero" class="city-hero-card"></div>
 
         <div class="section-card">
-          <div class="page-header-row" style="margin-bottom:10px;">
-            <h3 style="margin:0;">Linha do Tempo das Reuniões Mensais</h3>
-            <div style="display:flex; gap:8px;">
-              <button type="button" id="btnNewMeetingFromHistory" class="btn btn-primary btn-sm">+ Nova Reunião para esta Cidade</button>
-              <button type="button" id="btnEditCityFromHistory" class="btn btn-outline btn-sm">Editar Cidade / Logotipo</button>
-            </div>
+          <div class="page-header-row" style="margin-bottom:12px;">
+            <h3 style="margin:0;">Reuniões da Cidade</h3>
+            <button type="button" id="btnNewMeetingFromHistory" class="btn btn-primary btn-sm">+ Nova Reunião</button>
           </div>
           <div class="data-table-wrap">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Período / Título</th>
+                  <th>Reunião / Período</th>
                   <th>Data</th>
-                  <th>Versão PDF</th>
-                  <th>Situação</th>
-                  <th>Consentimento</th>
+                  <th>Status</th>
                   <th>Plano de Ação</th>
                   <th>Ações</th>
                 </tr>
@@ -140,15 +116,14 @@
         </div>
 
         <div class="section-card">
-          <h3>Comparação Histórica de Indicadores Operacionais</h3>
-          <div id="cityIndicatorMatrixWrap" class="data-table-wrap"></div>
-        </div>
-
-        <div class="section-card">
-          <h3>Acompanhamento de Melhorias &amp; Check de Status do Plano de Ação</h3>
-          <p class="hint" style="margin-bottom:12px;">
-            Marque o check nas ações realizadas para acompanhar a evolução nas próximas reuniões. Esses checks operacionais não alteram os PDFs congelados nem os registros de consentimento já confirmados.
-          </p>
+          <div class="page-header-row" style="margin-bottom:12px;">
+            <h3 style="margin:0;">Plano de Ação — Status das Ações</h3>
+            <select id="historyActionFilter" class="preset-select" style="height:32px; font-size:12px;">
+              <option value="all">Todas as ações</option>
+              <option value="pending">Apenas pendentes</option>
+              <option value="done">Apenas concluídas</option>
+            </select>
+          </div>
           <div class="data-table-wrap">
             <table class="data-table">
               <thead>
@@ -156,10 +131,10 @@
                   <th style="width:42px;">Check</th>
                   <th>Reunião</th>
                   <th>Item de Ação</th>
-                  <th>Proprietários</th>
+                  <th>Responsável</th>
                   <th>Prazo</th>
-                  <th>Situação de Execução</th>
-                  <th>Observação / Evidência</th>
+                  <th>Status</th>
+                  <th>Observação</th>
                 </tr>
               </thead>
               <tbody id="cityActionTrackerBody"></tbody>
@@ -169,267 +144,278 @@
       </div>
     </section>
 
-    <!-- VISÃO 3: Editor da Ata A4 (100% do sistema original preservado + fluxo PDF/Link) -->
+    <!-- VISÃO 3: Relatório / Editor da Ata -->
     <section id="view-editor" class="view-panel hidden">
       <div id="editorSubbar" class="editor-subbar">
         <div class="editor-subbar-left">
+          <button type="button" id="btnBackToHistory" class="btn btn-outline btn-sm">← Reuniões</button>
           <span id="editorCityBadge" class="action-badge">Caruaru</span>
-          <select id="selCityMeeting" class="preset-select" title="Selecionar reunião da cidade"></select>
+          <select id="selCityMeeting" class="preset-select" title="Selecionar reunião"></select>
           <button type="button" id="btnNewMeeting" class="btn btn-secondary btn-sm">+ Nova Reunião</button>
-          <span id="editorStatusBadge" class="status-badge aguardando_envio">Aguardando envio</span>
-          <span id="saveStatusIndicator" class="save-indicator">Sincronizado</span>
+          <span id="editorStatusBadge" class="status-badge aguardando_envio">Em edição</span>
+          <span id="saveStatusIndicator" class="save-indicator">Salvo</span>
         </div>
 
-        <div class="editor-subbar-right">
-          <select id="selPreset" class="preset-select" title="Aplicar modelo de referência ao rascunho"></select>
+        <div id="editorEditableActions" class="editor-subbar-right">
+          <button type="button" id="btnSaveMeeting" class="btn btn-outline btn-sm">Salvar</button>
+          <button type="button" id="btnPrintPdf" class="btn btn-outline btn-sm">Imprimir / PDF</button>
+          <button type="button" id="btnExportWord" class="btn btn-secondary btn-sm">Word</button>
+          <button type="button" id="btnGeneratePublicLink" class="btn btn-primary btn-sm">Enviar Link</button>
+        </div>
 
-          <button type="button" id="btnImportJson" class="btn btn-outline btn-sm" title="Abrir arquivo JSON salvo">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            Abrir
-          </button>
-          <input type="file" id="inpImportJson" accept=".json" hidden />
-
-          <button type="button" id="btnExportJson" class="btn btn-outline btn-sm" title="Salvar rascunho da ata em JSON">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-            Salvar JSON
-          </button>
-
-          <button type="button" id="btnExportWord" class="btn btn-secondary btn-sm" title="Baixar ata editável em Word (.doc)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            Exportar Word
-          </button>
-
-          <button type="button" id="btnPrintPdf" class="btn btn-outline btn-sm" title="Imprimir ou Salvar em PDF (Formato A4)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-            Imprimir / PDF (A4)
-          </button>
-
-          <button type="button" id="btnSaveMeeting" class="btn btn-outline btn-sm" title="Salvar alterações no banco de dados">
-            Salvar Rascunho
-          </button>
-
-          <button type="button" id="btnFinalizePdf" class="btn btn-secondary btn-sm" title="Gerar e congelar a versão definitiva desta ata em PDF">
-            Finalizar Ata (PDF)
-          </button>
-
-          <button type="button" id="btnGeneratePublicLink" class="btn btn-primary btn-sm" title="Gerar ou gerenciar o link público para consentimento do representante da cidade">
-            Gerar link para assinatura
-          </button>
-
-          <button type="button" id="btnOpenVersionsModal" class="btn btn-outline btn-sm" title="Consultar versões em PDF, consentimentos registrados e trilha de auditoria">
-            Versões / Auditoria
-          </button>
+        <div id="editorLockedActions" class="editor-subbar-right hidden">
+          <button type="button" id="btnDownloadConfirmedPdf" class="btn btn-secondary btn-sm">Baixar PDF</button>
+          <button type="button" id="btnViewSentLink" class="btn btn-outline btn-sm">Ver Link</button>
+          <button type="button" id="btnNextMeetingFromBar" class="btn btn-primary btn-sm">+ Próxima Reunião</button>
         </div>
       </div>
 
       <div id="lockedMeetingBanner" class="locked-banner hidden">
-        <div id="lockedMeetingInfo">
-          <strong>Ata confirmada e bloqueada para preservação documental.</strong>
-        </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button type="button" id="btnDownloadConfirmedPdf" class="btn btn-secondary btn-sm">Baixar PDF Confirmado</button>
-          <button type="button" id="btnUnlockNewVersion" class="btn btn-primary btn-sm">Criar Nova Versão para Correção</button>
-        </div>
+        <div id="lockedMeetingInfo"></div>
       </div>
 
       <main class="workspace">
-        <!-- Painel Esquerdo: Upload, Análise e Edição -->
+        <!-- Painel Esquerdo -->
         <aside class="editor-panel">
-          <nav class="tabs" aria-label="Etapas de geração">
-            <button type="button" class="tab-btn active" data-tab="tab-files">1. Arquivos</button>
-            <button type="button" class="tab-btn" data-tab="tab-header">2. Resumo</button>
-            <button type="button" class="tab-btn" data-tab="tab-actions">3. Ações</button>
-            <button type="button" class="tab-btn" data-tab="tab-layout">4. Layout</button>
-          </nav>
+          <!-- Modo Edição (enquanto link não foi enviado) -->
+          <div id="editorEditablePanel" class="editor-mode-wrap">
+            <nav id="editorTabsNav" class="tabs" aria-label="Etapas">
+              <button type="button" class="tab-btn active" data-tab="tab-files">1. Gerar Resumo</button>
+              <button type="button" class="tab-btn" data-tab="tab-header">2. Resumo</button>
+              <button type="button" class="tab-btn" data-tab="tab-actions">3. Plano de Ação</button>
+              <button type="button" class="tab-btn" data-tab="tab-layout">4. Cores &amp; Logo</button>
+            </nav>
 
-          <!-- Aba 1: Arquivos do Teams & Indicadores -->
-          <section id="tab-files" class="tab-content active">
-            <div class="panel-section">
-              <h3 class="section-title">1. Relatório de Presença (Teams)</h3>
-              <div id="dropAttendance" class="dropzone">
-                <strong>Subir CSV de Presença do Teams</strong>
-                <span>Arraste ou clique aqui (.csv / .tsv) — extrai data, hora, contrato e participantes</span>
-                <input type="file" id="fileAttendance" accept=".csv,.tsv,.txt" hidden />
+            <!-- Aba 1: Gerar Resumo -->
+            <section id="tab-files" class="tab-content active">
+              <div class="panel-section">
+                <h3 class="section-title">Presença (CSV do Teams)</h3>
+                <div id="dropAttendance" class="dropzone">
+                  <strong>Subir CSV de Presença</strong>
+                  <span>Extrai data, hora e participantes (.csv / .tsv)</span>
+                  <input type="file" id="fileAttendance" accept=".csv,.tsv,.txt" hidden />
+                </div>
+                <div id="attendanceStatus" class="file-status"></div>
               </div>
-              <div id="attendanceStatus" class="file-status"></div>
+
+              <div class="panel-section">
+                <h3 class="section-title">Transcrição da Reunião</h3>
+                <div id="dropTranscript" class="dropzone">
+                  <strong>Subir Transcrição</strong>
+                  <span>Aceita .txt, .vtt ou .docx</span>
+                  <input type="file" id="fileTranscript" accept=".txt,.vtt,.docx" hidden />
+                </div>
+                <div id="transcriptStatus" class="file-status"></div>
+
+                <div class="field">
+                  <label for="inpTranscriptPaste">Ou cole a transcrição / pauta:</label>
+                  <textarea id="inpTranscriptPaste" rows="6" placeholder="Cole o texto da reunião aqui..."></textarea>
+                </div>
+
+                <button type="button" id="btnAnalyzeTranscript" class="btn btn-primary" style="width:100%;">
+                  Gerar Resumo e Plano de Ação
+                </button>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="section-title">IA Opcional (Gemini)</h3>
+                <div class="field" style="margin-bottom:0;">
+                  <label for="inpGeminiKey">Chave API (opcional)</label>
+                  <input type="password" id="inpGeminiKey" placeholder="Opcional: AIza..." autocomplete="off" />
+                </div>
+              </div>
+            </section>
+
+            <!-- Aba 2: Resumo -->
+            <section id="tab-header" class="tab-content">
+              <div class="panel-section">
+                <h3 class="section-title">Dados da Reunião</h3>
+                <div class="field-row">
+                  <div class="field">
+                    <label for="inpRefLabel">Período</label>
+                    <input type="text" id="inpRefLabel" placeholder="Outubro/2026" />
+                  </div>
+                  <div class="field">
+                    <label for="inpMeetingDateIso">Data Base</label>
+                    <input type="text" id="inpMeetingDateIso" placeholder="2026-11-17" />
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="inpUnitName">Cidade / Unidade</label>
+                  <input type="text" id="inpUnitName" />
+                </div>
+                <div class="field">
+                  <label for="inpLocal">Local</label>
+                  <input type="text" id="inpLocal" />
+                </div>
+                <div class="field-row">
+                  <div class="field">
+                    <label for="inpDateText">Data</label>
+                    <input type="text" id="inpDateText" placeholder="17/11/2026 (Terça-Feira)" />
+                  </div>
+                  <div class="field">
+                    <label for="inpTimeText">Hora</label>
+                    <input type="text" id="inpTimeText" placeholder="09:00" />
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="inpParticipants">Participantes</label>
+                  <textarea id="inpParticipants" rows="3"></textarea>
+                </div>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="section-title">Título e Resumo (I.)</h3>
+                <div class="field">
+                  <label for="inpTitle">Título</label>
+                  <input type="text" id="inpTitle" placeholder="Ata de Reunião de Indicadores Outubro/2026" />
+                </div>
+                <div class="field">
+                  <label for="inpSummary">Resumo da Reunião</label>
+                  <textarea id="inpSummary" rows="6"></textarea>
+                </div>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="section-title">
+                  <span>Tópicos Destacados</span>
+                  <button type="button" id="btnAddTopic" class="btn btn-outline btn-sm">+ Tópico</button>
+                </h3>
+                <label class="checkbox-row">
+                  <input type="checkbox" id="chkShowTopics" />
+                  Exibir bloco de tópicos no relatório
+                </label>
+                <div id="topicsEditorList"></div>
+              </div>
+            </section>
+
+            <!-- Aba 3: Plano de Ação -->
+            <section id="tab-actions" class="tab-content">
+              <div id="prevMeetingFollowUpBox" class="followup-box hidden">
+                <div class="followup-header">
+                  <h4 id="prevMeetingTitle">Pendências da Reunião Anterior</h4>
+                  <button type="button" id="btnImportPendingActions" class="btn btn-secondary btn-sm">Puxar Pendências</button>
+                </div>
+                <div id="prevMeetingActionsList"></div>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="section-title">
+                  <span>Plano de Ação (<span id="actionCountBadge">0 itens</span>)</span>
+                </h3>
+                <div style="display:flex; gap:8px; margin-bottom:12px;">
+                  <button type="button" id="btnAddAction" class="btn btn-primary btn-sm" style="flex:1;">+ Adicionar Ação</button>
+                  <button type="button" id="btnClearStatuses" class="btn btn-outline btn-sm">Limpar Status</button>
+                </div>
+                <div id="actionsEditorList"></div>
+              </div>
+            </section>
+
+            <!-- Aba 4: Cores & Logo -->
+            <section id="tab-layout" class="tab-content">
+              <div class="panel-section">
+                <h3 class="section-title">Logo do Relatório</h3>
+                <div class="logo-upload-card">
+                  <div id="reportLogoPreview" class="logo-preview-box"></div>
+                  <div class="logo-upload-actions">
+                    <button type="button" id="btnChangeReportLogo" class="btn btn-primary btn-sm">Alterar Logo do Relatório</button>
+                    <button type="button" id="btnResetReportLogo" class="btn btn-outline btn-sm">Restaurar Padrão</button>
+                    <input type="file" id="inpReportLogoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden />
+                  </div>
+                </div>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="section-title">Logo da Cidade (Opcional)</h3>
+                <div class="logo-upload-card">
+                  <div id="editorCityLogoPreview" class="logo-preview-box">
+                    <span class="hint">Sem logo</span>
+                  </div>
+                  <div class="logo-upload-actions">
+                    <button type="button" id="btnChangeEditorCityLogo" class="btn btn-secondary btn-sm">Alterar Logo da Cidade</button>
+                    <button type="button" id="btnRemoveEditorCityLogo" class="btn btn-outline btn-sm">Remover</button>
+                    <input type="file" id="inpEditorCityLogoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden />
+                  </div>
+                </div>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="section-title">Cores do Relatório</h3>
+                <div class="field-row">
+                  <div class="field">
+                    <label for="inpPrimaryColor">Cor Principal</label>
+                    <div class="color-input-wrap">
+                      <input type="color" id="inpPrimaryColor" value="#0a7e3a" />
+                      <input type="text" id="inpPrimaryColorHex" value="#0a7e3a" maxlength="7" />
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="inpSecondaryColor">Cor Secundária</label>
+                    <div class="color-input-wrap">
+                      <input type="color" id="inpSecondaryColor" value="#b4c85a" />
+                      <input type="text" id="inpSecondaryColorHex" value="#b4c85a" maxlength="7" />
+                    </div>
+                  </div>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                  <span style="font-size:12px; font-weight:600; color:var(--ui-muted);">Paleta de Cores</span>
+                  <button type="button" id="btnAddPaletteColor" class="btn btn-outline btn-sm">+ Adicionar Cor</button>
+                </div>
+                <div id="colorPaletteSwatches" class="palette-swatches"></div>
+
+                <div class="field" style="margin-top:12px; margin-bottom:0;">
+                  <label for="selHeaderTheme">Estilo do Cabeçalho</label>
+                  <select id="selHeaderTheme">
+                    <option value="die">Com fundo colorido</option>
+                    <option value="locar">Fundo claro</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="section-title">Página A4</h3>
+                <div class="field-row">
+                  <div class="field">
+                    <label for="selDensity">Ajuste na Folha</label>
+                    <select id="selDensity">
+                      <option value="auto">Automático (1 página)</option>
+                      <option value="normal">Normal</option>
+                      <option value="compact">Compacto</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="inpBlankRows">Linhas em branco</label>
+                    <input type="number" id="inpBlankRows" min="0" max="6" value="1" />
+                  </div>
+                </div>
+                <div class="field" style="margin-bottom:0;">
+                  <label for="inpFooter">Rodapé</label>
+                  <input type="text" id="inpFooter" />
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- Modo Bloqueado (Link enviado ou confirmado: apenas alterar status do plano de ação) -->
+          <div id="lockedActionsPanel" class="locked-actions-panel hidden">
+            <div class="locked-panel-head">
+              <h3>Status do Plano de Ação</h3>
+              <span class="hint">Relatório bloqueado. Atualize apenas o status das ações abaixo.</span>
             </div>
-
-            <div class="panel-section">
-              <h3 class="section-title">2. Transcrição da Reunião (Teams)</h3>
-              <div id="dropTranscript" class="dropzone">
-                <strong>Subir Transcrição do Teams</strong>
-                <span>Suporta .txt, .vtt ou .docx exportados do Microsoft Teams</span>
-                <input type="file" id="fileTranscript" accept=".txt,.vtt,.docx" hidden />
-              </div>
-              <div id="transcriptStatus" class="file-status"></div>
-
-              <div class="field">
-                <label for="inpTranscriptPaste">Ou cole a transcrição do Teams abaixo:</label>
-                <textarea id="inpTranscriptPaste" rows="5" placeholder="Cole aqui a transcrição completa da reunião do Teams para gerar o resumo, tópicos e plano de ação..."></textarea>
-              </div>
-
-              <button type="button" id="btnAnalyzeTranscript" class="btn btn-primary" style="width:100%;">
-                Analisar Transcrição e Gerar Ata + Plano de Ação
+            <div id="lockedActionsList" class="locked-actions-list"></div>
+            <div class="locked-panel-foot">
+              <button type="button" id="btnNextMeetingFromLocked" class="btn btn-primary" style="width:100%;">
+                + Criar Próxima Reunião
               </button>
-              <p class="hint">
-                Leitura direta de CSV, TSV, TXT, VTT, DOCX e JSON preservada. A coluna <b>Status</b> é gerada vazia para preenchimento manual no papel.
-              </p>
             </div>
-
-            <div class="panel-section">
-              <h3 class="section-title">
-                <span>3. Indicadores da Reunião</span>
-                <button type="button" id="btnAddKpi" class="btn btn-outline btn-sm">+ Indicador</button>
-              </h3>
-              <div id="dropIndicators" class="dropzone">
-                <strong>Subir Planilha / CSV de Indicadores</strong>
-                <span>Opcional (.csv / .tsv com colunas Indicador; Valor; Status)</span>
-                <input type="file" id="fileIndicators" accept=".csv,.tsv,.json,.txt" hidden />
-              </div>
-              <div id="indicatorsStatus" class="file-status"></div>
-              <div id="kpiEditorList" class="kpi-editor-grid"></div>
-            </div>
-
-            <div class="panel-section">
-              <h3 class="section-title">Análise com IA (Opcional)</h3>
-              <div class="field" style="margin-bottom:0;">
-                <label for="inpGeminiKey">Chave API Gemini (deixe em branco para usar o analisador local)</label>
-                <input type="password" id="inpGeminiKey" placeholder="Opcional: AIza..." autocomplete="off" />
-              </div>
-            </div>
-          </section>
-
-          <!-- Aba 2: Cabeçalho, Resumo e Tópicos -->
-          <section id="tab-header" class="tab-content">
-            <div class="panel-section">
-              <h3 class="section-title">Cabeçalho da Reunião</h3>
-              <div class="field-row">
-                <div class="field">
-                  <label for="inpRefLabel">Período de Referência</label>
-                  <input type="text" id="inpRefLabel" placeholder="Outubro/2026" />
-                </div>
-                <div class="field">
-                  <label for="inpMeetingDateIso">Data Base (Histórico)</label>
-                  <input type="text" id="inpMeetingDateIso" placeholder="2026-11-17" />
-                </div>
-              </div>
-              <div class="field">
-                <label for="inpUnitName">Cidade / Projeto (Faixa superior direita)</label>
-                <input type="text" id="inpUnitName" />
-              </div>
-              <div class="field">
-                <label for="inpLocal">Local</label>
-                <input type="text" id="inpLocal" />
-              </div>
-              <div class="field-row">
-                <div class="field">
-                  <label for="inpDateText">Data</label>
-                  <input type="text" id="inpDateText" placeholder="17/11/2026 (Terça-Feira)" />
-                </div>
-                <div class="field">
-                  <label for="inpTimeText">Hora</label>
-                  <input type="text" id="inpTimeText" placeholder="09:00" />
-                </div>
-              </div>
-              <div class="field">
-                <label for="inpParticipants">Participação</label>
-                <textarea id="inpParticipants" rows="4"></textarea>
-              </div>
-            </div>
-
-            <div class="panel-section">
-              <h3 class="section-title">Título e Resumo Executivo (I.)</h3>
-              <div class="field">
-                <label for="inpTitle">Título da Ata</label>
-                <input type="text" id="inpTitle" placeholder="Ata de Reunião de Indicadores Outubro/2026" />
-              </div>
-              <div class="field">
-                <label for="inpSummary">Resumo da Reunião (Parágrafo I.)</label>
-                <textarea id="inpSummary" rows="6"></textarea>
-              </div>
-            </div>
-
-            <div class="panel-section">
-              <h3 class="section-title">
-                <span>Principais Tópicos &amp; Assuntos</span>
-                <button type="button" id="btnAddTopic" class="btn btn-outline btn-sm">+ Tópico</button>
-              </h3>
-              <label class="checkbox-row">
-                <input type="checkbox" id="chkShowTopics" />
-                Destacar bloco de principais tópicos na ata impressa
-              </label>
-              <div id="topicsEditorList"></div>
-            </div>
-          </section>
-
-          <!-- Aba 3: Plano de Ação + Acompanhamento da Reunião Anterior -->
-          <section id="tab-actions" class="tab-content">
-            <div id="prevMeetingFollowUpBox" class="followup-box hidden">
-              <div class="followup-header">
-                <h4 id="prevMeetingTitle">Acompanhamento da Reunião Anterior</h4>
-                <button type="button" id="btnImportPendingActions" class="btn btn-secondary btn-sm">Trazer Pendências</button>
-              </div>
-              <p class="hint" style="margin-bottom:8px;">
-                Dê check nas melhorias concluídas antes de gerar esta ata. Os itens ainda pendentes podem ser importados com 1 clique.
-              </p>
-              <div id="prevMeetingActionsList"></div>
-            </div>
-
-            <div class="panel-section">
-              <h3 class="section-title">
-                <span>Itens do Plano de Ação (<span id="actionCountBadge">0 itens</span>)</span>
-              </h3>
-              <div style="display:flex; gap:8px; margin-bottom:12px;">
-                <button type="button" id="btnAddAction" class="btn btn-primary btn-sm" style="flex:1;">+ Adicionar Item de Ação</button>
-                <button type="button" id="btnClearStatuses" class="btn btn-outline btn-sm" title="Garante coluna Status vazia para preencher no papel">Limpar Status</button>
-              </div>
-              <div id="actionsEditorList"></div>
-            </div>
-          </section>
-
-          <!-- Aba 4: Layout & Impressão -->
-          <section id="tab-layout" class="tab-content">
-            <div class="panel-section">
-              <h3 class="section-title">Personalização Visual Locar</h3>
-              <div class="field">
-                <label for="selHeaderTheme">Estilo do Timbrado</label>
-                <select id="selHeaderTheme">
-                  <option value="die">DIE Oficial (Cores Vivas Locar — Verde Bandeira &amp; Lima)</option>
-                  <option value="locar">Locar Claro (Fundo Branco c/ Logo Colorida)</option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label for="selDensity">Densidade / Ajuste na Página A4</label>
-                <select id="selDensity">
-                  <option value="auto">Automático (ajusta p/ caber em 1 página A4)</option>
-                  <option value="normal">Normal (espaçamento amplo igual foto com poucos itens)</option>
-                  <option value="compact">Compacto (ideal para 8 a 12 itens de ação)</option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label for="inpBlankRows">Linhas extras em branco ao final (p/ anotações no papel)</label>
-                <input type="number" id="inpBlankRows" min="0" max="6" value="1" />
-              </div>
-
-              <label class="checkbox-row">
-                <input type="checkbox" id="chkShowKpis" />
-                Exibir grade de cartões de indicadores resumidos na folha
-              </label>
-
-              <div class="field" style="margin-top:12px;">
-                <label for="inpFooter">Texto do Rodapé</label>
-                <input type="text" id="inpFooter" />
-              </div>
-            </div>
-          </section>
+          </div>
         </aside>
 
-        <!-- Painel Direito: Visualização em Tempo Real da Folha A4 (Preservado Integralmente) -->
+        <!-- Painel Direito: Folha A4 -->
         <section class="preview-panel">
           <div class="preview-toolbar">
-            <span>Visualização A4 em tempo real • Você pode clicar diretamente no documento para editar qualquer texto</span>
+            <span id="previewToolbarHint">Visualização A4</span>
             <div class="zoom-controls">
               <button type="button" id="btnZoomOut" class="btn btn-outline btn-sm">−</button>
               <span id="zoomLabel" style="min-width:44px; text-align:center; font-weight:600;">88%</span>
@@ -441,17 +427,15 @@
           <div id="previewScroll" class="preview-scroll">
             <div id="sheetWrapper" class="sheet-wrapper">
               <article id="a4Sheet" class="a4-sheet">
-                <!-- Faixa superior com nome da unidade à direita (encostada no topo) -->
                 <div class="sheet-banner">
                   <span id="sheetUnitName" class="sheet-unit-name" contenteditable="true">Caruaru</span>
                 </div>
 
-                <!-- Cabeçalho: Mancha orgânica com logo à esquerda + Metadados e Logo da Cidade à direita -->
                 <header class="sheet-header">
                   <div class="logo-organic-container">
                     <div class="organic-blob">
                       <span class="blob-circle-extra"></span>
-                      <img id="sheetLogoImg" src="assets/logo-locar-white.png" alt="LOCAR Gestão de Resíduos" class="sheet-logo-img" />
+                      <img id="sheetLogoImg" src="assets/logo-locar-white.png" alt="Logo do Relatório" class="sheet-logo-img" />
                     </div>
                   </div>
 
@@ -472,7 +456,7 @@
                         </div>
                       </div>
                       <div id="sheetCityLogoBox" class="sheet-city-logo-box hidden">
-                        <img id="sheetCityLogoImg" src="" alt="Logotipo da Cidade" class="sheet-city-logo-img" />
+                        <img id="sheetCityLogoImg" src="" alt="Logo da Cidade" class="sheet-city-logo-img" />
                       </div>
                     </div>
                     <div class="meta-participants">
@@ -481,7 +465,6 @@
                   </div>
                 </header>
 
-                <!-- Corpo Principal da Ata -->
                 <div class="sheet-body">
                   <h1 id="sheetTitle" class="sheet-title" contenteditable="true">Ata de Reunião de Indicadores Outubro/2026</h1>
 
@@ -490,16 +473,11 @@
                     <div id="sheetSummary" class="summary-text" contenteditable="true"></div>
                   </div>
 
-                  <!-- Destaque dos Principais Tópicos e Assuntos -->
                   <div id="sheetTopicsBox" class="topics-box">
                     <div class="topics-box-title">Principais Tópicos e Assuntos Destacados</div>
                     <div id="sheetTopicsList"></div>
                   </div>
 
-                  <!-- Cartões de Indicadores (opcional) -->
-                  <div id="sheetKpis" class="sheet-kpis" style="display:none;"></div>
-
-                  <!-- Tabela de Plano de Ação (4 colunas, Status vazio p/ papel) -->
                   <table class="action-table">
                     <colgroup>
                       <col class="col-action" />
@@ -519,7 +497,6 @@
                   </table>
                 </div>
 
-                <!-- Rodapé Institucional DIE -->
                 <footer class="sheet-footer">
                   <span id="sheetFooter" class="footer-label" contenteditable="true">DIE – Departamento de Inteligência Estratégica</span>
                   <div class="footer-circles" aria-hidden="true">
@@ -534,52 +511,38 @@
         </section>
       </main>
     </section>
-
-    <!-- VISÃO 4: Gerenciamento das 12 Cidades / Projetos de Limpeza -->
-    <section id="view-cities" class="view-panel hidden">
-      <div class="page-container">
-        <div class="page-header-row">
-          <div>
-            <h2>Cadastro e Gestão das Cidades / Projetos de Limpeza</h2>
-            <p>Configure nome da cidade, projeto de limpeza, logotipo individual e dados institucionais sem alterar o histórico de reuniões.</p>
-          </div>
-          <button type="button" id="btnNewCity" class="btn btn-primary btn-sm">+ Adicionar Cidade / Projeto</button>
-        </div>
-        <div id="citiesManageGrid" class="cities-grid"></div>
-      </div>
-    </section>
   </div>
 
   <!-- MODAL: Nova Reunião -->
   <div id="modalNewMeeting" class="modal-backdrop hidden" role="dialog" aria-modal="true">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>Nova Reunião Mensal</h3>
+        <h3>Nova Reunião</h3>
         <button type="button" class="icon-btn modal-close" data-close="modalNewMeeting">✕</button>
       </div>
       <form id="formNewMeeting">
         <div class="modal-body">
           <div class="field">
-            <label for="newMeetingRefLabel">Período de Referência (ex: Novembro/2026)</label>
+            <label for="newMeetingRefLabel">Período (ex: Novembro/2026)</label>
             <input type="text" id="newMeetingRefLabel" placeholder="Novembro/2026" required />
           </div>
           <div class="field">
-            <label for="newMeetingTitle">Título da Ata</label>
+            <label for="newMeetingTitle">Título</label>
             <input type="text" id="newMeetingTitle" placeholder="Ata de Reunião de Indicadores Novembro/2026" required />
           </div>
           <div class="field-row">
             <div class="field">
-              <label for="newMeetingRefMonth">Mês de Referência (YYYY-MM)</label>
+              <label for="newMeetingRefMonth">Mês (YYYY-MM)</label>
               <input type="text" id="newMeetingRefMonth" placeholder="2026-11" />
             </div>
             <div class="field">
-              <label for="newMeetingDate">Data da Reunião (YYYY-MM-DD)</label>
+              <label for="newMeetingDate">Data (YYYY-MM-DD)</label>
               <input type="text" id="newMeetingDate" placeholder="2026-12-15" />
             </div>
           </div>
           <label class="checkbox-row" style="margin-top:8px;">
             <input type="checkbox" id="newMeetingImportPending" checked />
-            Trazer automaticamente ações ainda pendentes da reunião anterior desta cidade
+            Trazer ações pendentes da reunião anterior
           </label>
         </div>
         <div class="modal-footer">
@@ -590,11 +553,11 @@
     </div>
   </div>
 
-  <!-- MODAL: Link Público para Assinatura / Consentimento -->
+  <!-- MODAL: Link Público -->
   <div id="modalPublicLink" class="modal-backdrop hidden" role="dialog" aria-modal="true">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>Link Público para Consentimento</h3>
+        <h3>Link para Consentimento</h3>
         <button type="button" class="icon-btn modal-close" data-close="modalPublicLink">✕</button>
       </div>
       <div id="publicLinkBody" class="modal-body"></div>
@@ -604,25 +567,11 @@
     </div>
   </div>
 
-  <!-- MODAL: Versões PDF, Consentimentos & Auditoria -->
-  <div id="modalVersionsAudit" class="modal-backdrop hidden" role="dialog" aria-modal="true">
-    <div class="modal-card modal-lg">
-      <div class="modal-header">
-        <h3>Histórico de Versões PDF, Consentimentos e Auditoria</h3>
-        <button type="button" class="icon-btn modal-close" data-close="modalVersionsAudit">✕</button>
-      </div>
-      <div id="versionsAuditBody" class="modal-body"></div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-outline btn-sm modal-close" data-close="modalVersionsAudit">Fechar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: Cadastro / Edição de Cidade / Projeto -->
+  <!-- MODAL: Cadastro / Edição de Cidade -->
   <div id="modalCityForm" class="modal-backdrop hidden" role="dialog" aria-modal="true">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="cityModalTitle">Editar Cidade / Projeto</h3>
+        <h3 id="cityModalTitle">Editar Cidade</h3>
         <button type="button" class="icon-btn modal-close" data-close="modalCityForm">✕</button>
       </div>
       <form id="formCity">
@@ -639,63 +588,59 @@
             </div>
           </div>
           <div class="field">
-            <label for="cityProjectNameInput">Identificação do Projeto de Limpeza</label>
+            <label for="cityProjectNameInput">Projeto</label>
             <input type="text" id="cityProjectNameInput" required />
           </div>
           <div class="field-row">
             <div class="field">
-              <label for="cityProjectCodeInput">Código do Projeto</label>
+              <label for="cityProjectCodeInput">Código</label>
               <input type="text" id="cityProjectCodeInput" placeholder="LOCAR-01" />
             </div>
             <div class="field">
-              <label for="cityOrderInput">Ordem no Seletor</label>
+              <label for="cityOrderInput">Ordem</label>
               <input type="number" id="cityOrderInput" min="1" max="99" value="1" />
             </div>
           </div>
           <div class="field-row">
             <div class="field">
-              <label for="cityLocalInput">Local Padrão das Reuniões</label>
+              <label for="cityLocalInput">Local padrão</label>
               <input type="text" id="cityLocalInput" value="Microsoft Teams" />
             </div>
             <div class="field">
-              <label for="cityFooterInput">Rodapé Padrão</label>
+              <label for="cityFooterInput">Rodapé padrão</label>
               <input type="text" id="cityFooterInput" value="DIE – Departamento de Inteligência Estratégica" />
             </div>
           </div>
           <div class="field">
-            <label for="cityInfoInput">Informações Institucionais do Projeto</label>
-            <textarea id="cityInfoInput" rows="2"></textarea>
-          </div>
-          <div class="field">
-            <label>Logotipo Individual da Cidade (PNG, JPG, WEBP ou SVG — até 2 MB)</label>
+            <label>Logo da Cidade (opcional)</label>
             <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
               <div id="cityLogoPreview" class="logo-preview-box">
-                <span class="hint">Sem logotipo</span>
+                <span class="hint">Sem logo</span>
               </div>
               <div style="display:flex; flex-direction:column; gap:6px;">
                 <input type="file" id="cityLogoInput" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
-                <button type="button" id="btnRemoveCityLogo" class="btn btn-outline btn-sm">Remover Logotipo</button>
+                <button type="button" id="btnRemoveCityLogo" class="btn btn-outline btn-sm">Remover Logo</button>
               </div>
             </div>
           </div>
           <label class="checkbox-row">
             <input type="checkbox" id="cityActiveInput" checked />
-            Cidade/projeto ativo no painel
+            Cidade ativa
           </label>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline btn-sm modal-close" data-close="modalCityForm">Cancelar</button>
-          <button type="submit" class="btn btn-primary btn-sm">Salvar Cidade / Projeto</button>
+          <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- MODAL: Administradores LOCAR & Troca de Senha -->
+  <!-- MODAL: Usuários / Senha -->
   <div id="modalAdminUsers" class="modal-backdrop hidden" role="dialog" aria-modal="true">
     <div class="modal-card modal-lg">
       <div class="modal-header">
-        <h3>Administradores LOCAR &amp; Segurança</h3>
+        <h3>Usuários e Senha</h3>
         <button type="button" class="icon-btn modal-close" data-close="modalAdminUsers">✕</button>
       </div>
       <div id="adminUsersBody" class="modal-body"></div>

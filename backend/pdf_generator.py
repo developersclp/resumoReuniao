@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import html
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -16,6 +17,50 @@ from backend.security import sha256_hex
 _CSS_PATH = BASE_DIR / "css" / "styles.css"
 _WHITE_LOGO_PATH = BASE_DIR / "assets" / "logo-locar-white.png"
 _COLOR_LOGO_PATH = BASE_DIR / "assets" / "logo-locar.png"
+_HEX_RE = re.compile(r"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+
+def _parse_hex_rgb(color: str | None, fallback: str) -> tuple[str, tuple[int, int, int]]:
+    raw = str(color or "").strip()
+    m = _HEX_RE.match(raw)
+    if not m:
+        raw = fallback
+        m = _HEX_RE.match(raw)
+    hx = m.group(1)
+    if len(hx) == 3:
+        hx = "".join(c * 2 for c in hx)
+    r = int(hx[0:2], 16)
+    g = int(hx[2:4], 16)
+    b = int(hx[4:6], 16)
+    return f"#{hx.lower()}", (r, g, b)
+
+
+def _mix_rgb(rgb: tuple[int, int, int], target: tuple[int, int, int], ratio: float) -> str:
+    r = max(0, min(255, round(rgb[0] * (1 - ratio) + target[0] * ratio)))
+    g = max(0, min(255, round(rgb[1] * (1 - ratio) + target[1] * ratio)))
+    b = max(0, min(255, round(rgb[2] * (1 - ratio) + target[2] * ratio)))
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def build_report_theme_style(primary_color: str | None, secondary_color: str | None) -> str:
+    p_hex, (pr, pg, pb) = _parse_hex_rgb(primary_color, "#0a7e3a")
+    s_hex, (sr, sg, sb) = _parse_hex_rgb(secondary_color, "#b4c85a")
+    p_dark = _mix_rgb((pr, pg, pb), (0, 0, 0), 0.22)
+    p_light = _mix_rgb((pr, pg, pb), (255, 255, 255), 0.14)
+    p_soft = _mix_rgb((pr, pg, pb), (255, 255, 255), 0.92)
+    return "; ".join(
+        [
+            f"--report-primary: {p_hex}",
+            f"--report-primary-dark: {p_dark}",
+            f"--report-primary-light: {p_light}",
+            f"--report-primary-soft: {p_soft}",
+            f"--report-primary-a44: rgba({pr}, {pg}, {pb}, 0.44)",
+            f"--report-primary-a24: rgba({pr}, {pg}, {pb}, 0.24)",
+            f"--report-secondary: {s_hex}",
+            f"--report-secondary-a50: rgba({sr}, {sg}, {sb}, 0.50)",
+            f"--report-secondary-a36: rgba({sr}, {sg}, {sb}, 0.36)",
+        ]
+    )
 
 
 def _load_file_data_url(path: Path, mime: str = "image/png") -> str:
@@ -53,7 +98,16 @@ def build_a4_html(meeting_snapshot: dict, city_snapshot: dict | None = None) -> 
     if should_compact:
         sheet_classes.append("density-compact")
 
-    locar_logo_url = _load_file_data_url(_WHITE_LOGO_PATH if is_die else _COLOR_LOGO_PATH)
+    primary_color = meeting_snapshot.get("primaryColor") or city_snapshot.get("default_primary_color") or "#0a7e3a"
+    secondary_color = meeting_snapshot.get("secondaryColor") or city_snapshot.get("default_secondary_color") or "#b4c85a"
+    theme_style_attr = build_report_theme_style(primary_color, secondary_color)
+
+    report_logo_url = (meeting_snapshot.get("reportLogoDataUrl") or city_snapshot.get("report_logo_data_url") or "").strip()
+    if report_logo_url:
+        locar_logo_url = report_logo_url
+        sheet_classes.append("has-custom-report-logo")
+    else:
+        locar_logo_url = _load_file_data_url(_WHITE_LOGO_PATH if is_die else _COLOR_LOGO_PATH)
     city_logo_url = (city_snapshot.get("logo_data_url") or "").strip()
 
     unit_name = meeting_snapshot.get("unitName") or city_snapshot.get("name") or "Unidade"
@@ -169,7 +223,7 @@ def build_a4_html(meeting_snapshot: dict, city_snapshot: dict | None = None) -> 
   </style>
 </head>
 <body>
-  <article class="{' '.join(sheet_classes)}">
+  <article class="{' '.join(sheet_classes)}" style="{html.escape(theme_style_attr, quote=True)}">
     <div class="sheet-banner">
       <span class="sheet-unit-name">{html.escape(unit_name)}</span>
     </div>
@@ -178,7 +232,7 @@ def build_a4_html(meeting_snapshot: dict, city_snapshot: dict | None = None) -> 
       <div class="logo-organic-container">
         <div class="organic-blob">
           <span class="blob-circle-extra"></span>
-          <img src="{locar_logo_url}" alt="LOCAR Gestão de Resíduos" class="sheet-logo-img" />
+          <img src="{html.escape(locar_logo_url, quote=True)}" alt="Logo do Relatório" class="sheet-logo-img" />
         </div>
       </div>
 

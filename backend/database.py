@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Iterator
 
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from backend.config import get_database_url
@@ -51,8 +51,33 @@ def reconfigure_engine(database_url: str) -> None:
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
+def _ensure_schema_columns(conn) -> None:
+    """Adiciona colunas novas de forma idempotente em bancos SQLite/PostgreSQL existentes."""
+    inspector = inspect(conn)
+    table_names = set(inspector.get_table_names())
+    migrations = {
+        "cities": [
+            ("default_primary_color", "VARCHAR(20) NOT NULL DEFAULT '#0a7e3a'"),
+            ("default_secondary_color", "VARCHAR(20) NOT NULL DEFAULT '#b4c85a'"),
+            ("report_logo_data_url", "TEXT"),
+        ],
+        "meetings": [
+            ("primary_color", "VARCHAR(20) NOT NULL DEFAULT '#0a7e3a'"),
+            ("secondary_color", "VARCHAR(20) NOT NULL DEFAULT '#b4c85a'"),
+            ("report_logo_data_url", "TEXT"),
+        ],
+    }
+    for table_name, columns in migrations.items():
+        if table_name not in table_names:
+            continue
+        existing = {col["name"] for col in inspector.get_columns(table_name)}
+        for col_name, col_ddl in columns:
+            if col_name not in existing:
+                conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_ddl}"))
+
+
 def init_db() -> None:
-    """Cria as tabelas caso ainda não existam."""
+    """Cria as tabelas caso ainda não existam e garante migrações incrementais."""
     from backend import models  # noqa: F401
     from sqlalchemy.exc import IntegrityError, ProgrammingError
 
@@ -62,12 +87,14 @@ def init_db() -> None:
             conn.execute(text("SELECT pg_advisory_lock(847291038);"))
             try:
                 Base.metadata.create_all(bind=conn)
+                _ensure_schema_columns(conn)
                 conn.commit()
             except (IntegrityError, ProgrammingError) as exc:
                 conn.rollback()
                 err_str = str(exc).lower()
                 if "already exists" in err_str or "unique constraint" in err_str or "pg_type" in err_str:
-                    pass
+                    _ensure_schema_columns(conn)
+                    conn.commit()
                 else:
                     raise
             finally:
@@ -75,6 +102,9 @@ def init_db() -> None:
                 conn.commit()
     else:
         Base.metadata.create_all(bind=engine)
+        with engine.connect() as conn:
+            _ensure_schema_columns(conn)
+            conn.commit()
 
 
 @contextmanager

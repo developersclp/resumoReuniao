@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import timedelta
 
@@ -61,6 +62,16 @@ ALLOWED_WORKFLOW_STATUSES = {
     "link_invalido",
 }
 ALLOWED_TRACKING_STATUSES = {"pendente", "em_andamento", "concluida", "nao_realizada"}
+_HEX_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+
+def _normalize_hex_color(value: str | None, default: str) -> str:
+    raw = str(value or "").strip()
+    if not _HEX_COLOR_RE.match(raw):
+        return default
+    if len(raw) == 4:
+        return "#" + "".join(ch * 2 for ch in raw[1:]).lower()
+    return raw.lower()
 
 
 def _slugify(value: str) -> str:
@@ -124,7 +135,7 @@ def _workflow_label(status: str) -> str:
 
 
 def _find_previous_meeting(db: Session, meeting: Meeting) -> Meeting | None:
-    """Localiza a reunião anterior da mesma cidade/projeto para acompanhamento e comparação."""
+    """Localiza a reunião anterior da mesma cidade/projeto para acompanhamento e importação de pendências."""
     candidates = (
         db.query(Meeting)
         .filter(Meeting.city_id == meeting.city_id, Meeting.id != meeting.id)
@@ -138,7 +149,7 @@ def _find_previous_meeting(db: Session, meeting: Meeting) -> Meeting | None:
         cand_key = (cand.meeting_date or "", cand.created_at)
         if cand_key < cur_key:
             return cand
-    return None
+    return candidates[0]
 
 
 def _serialize_link_admin(link: PublicLink) -> dict:
@@ -288,6 +299,36 @@ def _apply_meeting_payload(db: Session, meeting: Meeting, payload: dict) -> None
         meeting.set_topics(payload.get("topics") or [])
     if "showKpisOnSheet" in payload:
         meeting.show_kpis_on_sheet = bool(payload.get("showKpisOnSheet"))
+    if "primaryColor" in payload:
+        color = _normalize_hex_color(payload.get("primaryColor"), "#0a7e3a")
+        meeting.primary_color = color
+        if meeting.city:
+            meeting.city.default_primary_color = color
+    if "secondaryColor" in payload:
+        color = _normalize_hex_color(payload.get("secondaryColor"), "#b4c85a")
+        meeting.secondary_color = color
+        if meeting.city:
+            meeting.city.default_secondary_color = color
+    if "reportLogoDataUrl" in payload:
+        raw_report_logo = str(payload.get("reportLogoDataUrl") or "").strip()
+        if raw_report_logo == "":
+            meeting.report_logo_data_url = None
+            if meeting.city:
+                meeting.city.report_logo_data_url = None
+        else:
+            validated_url, _ = validate_logo_data_url(raw_report_logo)
+            meeting.report_logo_data_url = validated_url
+            if meeting.city:
+                meeting.city.report_logo_data_url = validated_url
+    if "cityLogoDataUrl" in payload and meeting.city:
+        raw_city_logo = str(payload.get("cityLogoDataUrl") or "").strip()
+        if raw_city_logo == "":
+            meeting.city.logo_data_url = None
+            meeting.city.logo_mime_type = None
+        else:
+            validated_url, validated_mime = validate_logo_data_url(raw_city_logo)
+            meeting.city.logo_data_url = validated_url
+            meeting.city.logo_mime_type = validated_mime
     if "extraBlankRows" in payload:
         try:
             meeting.extra_blank_rows = max(0, min(6, int(payload.get("extraBlankRows") or 0)))
@@ -657,6 +698,7 @@ def create_city():
 
     try:
         logo_url, logo_mime = validate_logo_data_url(data.get("logo_data_url"))
+        report_logo_url, _ = validate_logo_data_url(data.get("report_logo_data_url"))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 
@@ -669,6 +711,9 @@ def create_city():
         state_uf=str(data.get("state_uf") or "PE")[:10].upper(),
         logo_data_url=logo_url,
         logo_mime_type=logo_mime,
+        default_primary_color=_normalize_hex_color(data.get("default_primary_color"), "#0a7e3a"),
+        default_secondary_color=_normalize_hex_color(data.get("default_secondary_color"), "#b4c85a"),
+        report_logo_data_url=report_logo_url,
         institutional_info=str(data.get("institutional_info") or ""),
         default_local=str(data.get("default_local") or "Microsoft Teams")[:180],
         default_footer=str(data.get("default_footer") or "DIE – Departamento de Inteligência Estratégica")[:220],
@@ -733,6 +778,10 @@ def update_city(city_id: str):
             pass
     if "is_active" in data:
         city.is_active = bool(data.get("is_active"))
+    if "default_primary_color" in data:
+        city.default_primary_color = _normalize_hex_color(data.get("default_primary_color"), "#0a7e3a")
+    if "default_secondary_color" in data:
+        city.default_secondary_color = _normalize_hex_color(data.get("default_secondary_color"), "#b4c85a")
 
     if data.get("remove_logo") is True:
         city.logo_data_url = None
@@ -747,6 +796,19 @@ def update_city(city_id: str):
                 logo_url, logo_mime = validate_logo_data_url(raw_logo)
                 city.logo_data_url = logo_url
                 city.logo_mime_type = logo_mime
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+
+    if data.get("remove_report_logo") is True:
+        city.report_logo_data_url = None
+    elif "report_logo_data_url" in data and data.get("report_logo_data_url") is not None:
+        raw_rlogo = str(data.get("report_logo_data_url") or "").strip()
+        if raw_rlogo == "":
+            city.report_logo_data_url = None
+        else:
+            try:
+                rlogo_url, _ = validate_logo_data_url(raw_rlogo)
+                city.report_logo_data_url = rlogo_url
             except ValueError as exc:
                 return jsonify({"error": str(exc)}), 400
 
@@ -867,6 +929,17 @@ def create_city_meeting(city_id: str):
     meeting_date = str(data.get("meeting_date") or data.get("meetingDate") or "").strip()
     ref_month = str(data.get("reference_month") or data.get("referenceMonth") or "").strip()
 
+    report_logo_url = city.report_logo_data_url
+    if "reportLogoDataUrl" in data:
+        raw_rl = str(data.get("reportLogoDataUrl") or "").strip()
+        if raw_rl == "":
+            report_logo_url = None
+        else:
+            try:
+                report_logo_url, _ = validate_logo_data_url(raw_rl)
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+
     meeting = Meeting(
         city_id=city.id,
         reference_month=ref_month[:20],
@@ -878,13 +951,13 @@ def create_city_meeting(city_id: str):
         time_text=str(data.get("timeText") or "")[:40],
         participants=str(data.get("participants") or ""),
         title=title[:255],
-        summary=str(
-            data.get("summary")
-            or f"A reunião de indicadores do Contrato {city.name} apresentou a análise dos resultados operacionais, quadro de colaboradores, horas extras, atestados, faltas, manutenção, combustível, segurança do trabalho e resultado financeiro (DRO)."
-        ),
+        summary=str(data.get("summary") or ""),
         show_topics=bool(data.get("showTopics", True)),
         show_kpis_on_sheet=bool(data.get("showKpisOnSheet", False)),
         header_theme=str(data.get("headerTheme") or "die")[:20],
+        primary_color=_normalize_hex_color(data.get("primaryColor"), city.default_primary_color or "#0a7e3a"),
+        secondary_color=_normalize_hex_color(data.get("secondaryColor"), city.default_secondary_color or "#b4c85a"),
+        report_logo_data_url=report_logo_url,
         density_mode=str(data.get("densityMode") or "auto")[:20],
         extra_blank_rows=max(0, min(6, int(data.get("extraBlankRows", 1) or 1))),
         footer_text=str(data.get("footerText") or city.default_footer or "DIE – Departamento de Inteligência Estratégica")[:220],
@@ -931,13 +1004,13 @@ def create_city_meeting(city_id: str):
 
     g.db.flush()
 
-    # Opção para já importar pendências da reunião anterior na criação
-    if data.get("auto_import_pending"):
+    # Por padrão, puxar automaticamente as ações pendentes da reunião anterior na criação
+    if data.get("auto_import_pending", True):
         prev = _find_previous_meeting(g.db, meeting)
         if prev:
             sort_idx = len(meeting.actions)
             for src in prev.actions:
-                if not src.checked_completed:
+                if not src.checked_completed and src.tracking_status != "concluida":
                     g.db.add(
                         ActionItem(
                             meeting_id=meeting.id,
@@ -947,7 +1020,7 @@ def create_city_meeting(city_id: str):
                             owner=src.owner,
                             deadline=src.deadline,
                             status_text="",
-                            tracking_status="pendente",
+                            tracking_status=src.tracking_status or "pendente",
                             checked_completed=False,
                             sort_order=sort_idx,
                         )
@@ -991,8 +1064,8 @@ def update_meeting(meeting_id: str):
             jsonify(
                 {
                     "error": (
-                        "Esta ata já foi confirmada pelo representante da cidade e não pode ser alterada "
-                        "silenciosamente. Crie uma nova versão para corrigir."
+                        "Este relatório já teve o link enviado e está bloqueado para edição. "
+                        "Apenas o status do plano de ação pode ser alterado."
                     ),
                     "code": "MEETING_LOCKED",
                 }
@@ -1001,7 +1074,11 @@ def update_meeting(meeting_id: str):
         )
 
     data = request.get_json(silent=True) or {}
-    _apply_meeting_payload(g.db, meeting, data)
+    try:
+        _apply_meeting_payload(g.db, meeting, data)
+    except ValueError as exc:
+        g.db.rollback()
+        return jsonify({"error": str(exc)}), 400
     log_audit(
         g.db,
         event_type="meeting_updated",
@@ -1171,6 +1248,77 @@ def import_pending_actions(meeting_id: str):
 # -------------------- Finalização de PDF, Versões e Link Público --------------------
 
 
+def _freeze_meeting_pdf_version(
+    db: Session, meeting: Meeting, admin_user: AdminUser, change_reason: str = ""
+) -> MeetingVersion:
+    """Gera o PDF definitivo da ata e registra uma nova MeetingVersion imutável."""
+    db.refresh(meeting)
+    city = meeting.city
+    snapshot = meeting.to_editor_snapshot()
+    city_snapshot = city.to_dict(include_logo=True) if city else {}
+
+    pdf_bytes, pdf_sha256, pdf_engine = render_meeting_pdf(snapshot, city_snapshot)
+
+    next_version_num = max([v.version_number for v in meeting.versions], default=0) + 1
+    for prev_ver in meeting.versions:
+        if prev_ver.is_current:
+            prev_ver.is_current = False
+
+    now = utcnow_naive()
+    for old_link in meeting.public_links:
+        if old_link.status == "active":
+            old_link.status = "revoked"
+            old_link.revoked_at = now
+            old_link.revoked_by_name = admin_user.name
+            old_link.revoke_reason = f"Substituído pela versão v{next_version_num}"
+
+    city_slug = city.slug if city else "unidade"
+    ref_slug = _slugify(meeting.reference_label or meeting.reference_month or "ata")
+    pdf_filename = sanitize_filename(f"ata_{city_slug}_{ref_slug}_v{next_version_num}.pdf")
+    reason_text = str(change_reason or "").strip() or (
+        "Versão inicial definitiva" if next_version_num == 1 else f"Revisão v{next_version_num}"
+    )
+
+    version = MeetingVersion(
+        meeting_id=meeting.id,
+        city_id=meeting.city_id,
+        version_number=next_version_num,
+        is_current=True,
+        change_reason=reason_text[:300],
+        snapshot_json=json.dumps(snapshot, ensure_ascii=False),
+        pdf_filename=pdf_filename,
+        pdf_content=pdf_bytes,
+        pdf_size_bytes=len(pdf_bytes),
+        pdf_sha256=pdf_sha256,
+        generated_by=admin_user.id,
+        generated_by_name=admin_user.name,
+        generated_at=now,
+    )
+    db.add(version)
+    db.flush()
+
+    meeting.current_version_number = next_version_num
+    log_audit(
+        db,
+        event_type="meeting_pdf_finalized",
+        actor_type="admin",
+        actor_identifier=admin_user.email,
+        city_id=meeting.city_id,
+        meeting_id=meeting.id,
+        meeting_version_id=version.id,
+        details={
+            "version_number": next_version_num,
+            "pdf_sha256": pdf_sha256,
+            "pdf_size_bytes": len(pdf_bytes),
+            "pdf_engine": pdf_engine,
+            "change_reason": reason_text,
+        },
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("User-Agent", ""),
+    )
+    return version
+
+
 @admin_bp.route("/meetings/<meeting_id>/finalize", methods=["POST"])
 @require_admin
 def finalize_meeting_pdf(meeting_id: str):
@@ -1181,7 +1329,7 @@ def finalize_meeting_pdf(meeting_id: str):
         return (
             jsonify(
                 {
-                    "error": "Esta ata já foi confirmada. Use 'Criar Nova Versão' para emitir uma revisão.",
+                    "error": "Este relatório já teve o link enviado ou confirmado e está bloqueado para edição.",
                     "code": "MEETING_LOCKED",
                 }
             ),
@@ -1189,86 +1337,28 @@ def finalize_meeting_pdf(meeting_id: str):
         )
 
     data = request.get_json(silent=True) or {}
-    if isinstance(data.get("snapshot"), dict):
-        _apply_meeting_payload(g.db, meeting, data["snapshot"])
-        g.db.flush()
-    elif any(k in data for k in ("title", "summary", "actions", "unitName", "participants")):
-        _apply_meeting_payload(g.db, meeting, data)
-        g.db.flush()
-
-    g.db.refresh(meeting)
-    city = meeting.city
-    snapshot = meeting.to_editor_snapshot()
-    city_snapshot = city.to_dict(include_logo=True) if city else {}
+    try:
+        if isinstance(data.get("snapshot"), dict):
+            _apply_meeting_payload(g.db, meeting, data["snapshot"])
+            g.db.flush()
+        elif any(k in data for k in ("title", "summary", "actions", "unitName", "participants")):
+            _apply_meeting_payload(g.db, meeting, data)
+            g.db.flush()
+    except ValueError as exc:
+        g.db.rollback()
+        return jsonify({"error": str(exc)}), 400
 
     try:
-        pdf_bytes, pdf_sha256, pdf_engine = render_meeting_pdf(snapshot, city_snapshot)
+        version = _freeze_meeting_pdf_version(
+            g.db, meeting, g.admin_user, change_reason=str(data.get("change_reason") or "")
+        )
     except Exception as exc:
+        g.db.rollback()
         return jsonify({"error": f"Erro ao gerar PDF definitivo da ata: {exc}"}), 500
 
-    next_version_num = max([v.version_number for v in meeting.versions], default=0) + 1
-    for prev_ver in meeting.versions:
-        if prev_ver.is_current:
-            prev_ver.is_current = False
-
-    # Revoga links ativos de versões anteriores
-    now = utcnow_naive()
-    for old_link in meeting.public_links:
-        if old_link.status == "active":
-            old_link.status = "revoked"
-            old_link.revoked_at = now
-            old_link.revoked_by_name = g.admin_user.name
-            old_link.revoke_reason = f"Substituído pela versão v{next_version_num}"
-
-    city_slug = city.slug if city else "unidade"
-    ref_slug = _slugify(meeting.reference_label or meeting.reference_month or "ata")
-    pdf_filename = sanitize_filename(f"ata_{city_slug}_{ref_slug}_v{next_version_num}.pdf")
-    change_reason = str(data.get("change_reason") or "").strip() or (
-        "Versão inicial definitiva" if next_version_num == 1 else f"Revisão v{next_version_num}"
-    )
-
-    import json
-
-    version = MeetingVersion(
-        meeting_id=meeting.id,
-        city_id=meeting.city_id,
-        version_number=next_version_num,
-        is_current=True,
-        change_reason=change_reason[:300],
-        snapshot_json=json.dumps(snapshot, ensure_ascii=False),
-        pdf_filename=pdf_filename,
-        pdf_content=pdf_bytes,
-        pdf_size_bytes=len(pdf_bytes),
-        pdf_sha256=pdf_sha256,
-        generated_by=g.admin_user.id,
-        generated_by_name=g.admin_user.name,
-        generated_at=now,
-    )
-    g.db.add(version)
-    g.db.flush()
-
-    meeting.current_version_number = next_version_num
     meeting.workflow_status = "aguardando_envio"
     meeting.is_locked = False
 
-    log_audit(
-        g.db,
-        event_type="meeting_pdf_finalized",
-        actor_type="admin",
-        actor_identifier=g.admin_user.email,
-        city_id=meeting.city_id,
-        meeting_id=meeting.id,
-        meeting_version_id=version.id,
-        details={
-            "version_number": next_version_num,
-            "pdf_sha256": pdf_sha256,
-            "pdf_size_bytes": len(pdf_bytes),
-            "pdf_engine": pdf_engine,
-            "change_reason": change_reason,
-        },
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("User-Agent", ""),
-    )
     g.db.commit()
     g.db.refresh(meeting)
     res = _serialize_meeting_full(g.db, meeting)
@@ -1374,36 +1464,51 @@ def create_public_link(meeting_id: str):
     if not meeting:
         return jsonify({"error": "Reunião não encontrada."}), 404
 
-    current_version = next((v for v in meeting.versions if v.is_current), None)
-    if not current_version:
+    if meeting.workflow_status == "confirmada":
         return (
-            jsonify(
-                {
-                    "error": "Finalize e gere o PDF definitivo da ata antes de gerar o link para assinatura."
-                }
-            ),
-            400,
-        )
-
-    existing_consent = (
-        g.db.query(ConsentRecord)
-        .filter(ConsentRecord.meeting_version_id == current_version.id)
-        .first()
-    )
-    if existing_consent or meeting.is_locked:
-        return (
-            jsonify(
-                {
-                    "error": (
-                        f"A versão vigente (v{current_version.version_number}) já possui consentimento registrado. "
-                        "Crie e finalize uma nova versão para enviar outro link."
-                    )
-                }
-            ),
+            jsonify({"error": "Esta ata já possui consentimento confirmado."}),
             409,
         )
 
     data = request.get_json(silent=True) or {}
+    if not meeting.is_locked:
+        try:
+            if isinstance(data.get("snapshot"), dict):
+                _apply_meeting_payload(g.db, meeting, data["snapshot"])
+                g.db.flush()
+            elif any(k in data for k in ("title", "summary", "actions", "unitName", "participants", "primaryColor", "secondaryColor", "reportLogoDataUrl")):
+                _apply_meeting_payload(g.db, meeting, data)
+                g.db.flush()
+        except ValueError as exc:
+            g.db.rollback()
+            return jsonify({"error": str(exc)}), 400
+
+    current_version = next((v for v in meeting.versions if v.is_current), None)
+    if current_version:
+        existing_consent = (
+            g.db.query(ConsentRecord)
+            .filter(ConsentRecord.meeting_version_id == current_version.id)
+            .first()
+        )
+        if existing_consent:
+            return (
+                jsonify(
+                    {
+                        "error": f"A versão vigente (v{current_version.version_number}) já possui consentimento registrado."
+                    }
+                ),
+                409,
+            )
+
+    if not current_version or (bool(data.get("auto_finalize")) and not meeting.is_locked):
+        try:
+            current_version = _freeze_meeting_pdf_version(
+                g.db, meeting, g.admin_user, change_reason="Versão definitiva para envio do link"
+            )
+        except Exception as exc:
+            g.db.rollback()
+            return jsonify({"error": f"Erro ao gerar PDF definitivo da ata: {exc}"}), 500
+
     try:
         days = int(data.get("expires_in_days") or get_default_link_days())
     except (TypeError, ValueError):
@@ -1434,6 +1539,7 @@ def create_public_link(meeting_id: str):
     )
     g.db.add(link)
     meeting.workflow_status = "link_enviado"
+    meeting.is_locked = True
     g.db.flush()
 
     log_audit(
@@ -1459,6 +1565,8 @@ def create_public_link(meeting_id: str):
                 "version_number": current_version.version_number,
                 "workflow_status": meeting.workflow_status,
                 "workflow_label": _workflow_label(meeting.workflow_status),
+                "is_locked": True,
+                "current_version": current_version.to_metadata_dict(),
             }
         ),
         201,

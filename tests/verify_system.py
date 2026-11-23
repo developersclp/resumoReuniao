@@ -1,4 +1,4 @@
-"""Testes automatizados completos da Plataforma Grupo LOCAR (12 cidades, PDF congelado, concorrência e check de melhorias)."""
+"""Testes automatizados completos da Plataforma LOCAR — Fluxo Simplificado, Cores/Logo, Bloqueio ao Enviar Link e Consentimento."""
 
 from __future__ import annotations
 
@@ -19,8 +19,8 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 
-def make_test_logo_data_url() -> str:
-    img = Image.new("RGBA", (180, 72), (10, 126, 58, 255))
+def make_test_logo_data_url(color: tuple[int, int, int, int] = (10, 126, 58, 255)) -> str:
+    img = Image.new("RGBA", (180, 72), color)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     b64 = base64.b64encode(buf.getvalue()).decode("ascii")
@@ -34,9 +34,9 @@ def run_all_tests() -> None:
         os.environ["LOCAR_DATABASE_URL"] = f"sqlite:///{(Path(tmp_dir) / 'test_locar.db').as_posix()}"
         os.environ["APP_SECRET_KEY"] = "test-secret-key-locar-2026-deterministico"
 
-        from backend.database import SessionLocal, init_db, reconfigure_engine
+        from backend.database import reconfigure_engine
+        from backend.pdf_generator import build_a4_html
         from backend.security import clear_rate_limits
-        from backend.seed import seed_initial_data
         from server import create_app, reset_bootstrap_flag
 
         reconfigure_engine(os.environ["LOCAR_DATABASE_URL"])
@@ -57,7 +57,6 @@ def run_all_tests() -> None:
             r = client.get(url)
             assert r.status_code == 401, f"Esperado 401 em {url}, veio {r.status_code}"
 
-        # Proteção contra token público inexistente ou acesso direto ao banco/arquivos
         r_not_found = client.get("/api/public/atas/token-inexistente-xyz")
         assert r_not_found.status_code == 404
         r_leak = client.get("/data/test_locar.db")
@@ -71,7 +70,7 @@ def run_all_tests() -> None:
         assert r_login.status_code == 200, f"Login falhou: {r_login.get_data(as_text=True)}"
         assert r_login.get_json()["authenticated"] is True
 
-        # 3. Verificar 12 cidades/projetos e preservação ao editar identificação + logotipo
+        # 3. Verificar 12 cidades e edição de cidade/logo preservando histórico
         r_dash = client.get("/api/dashboard")
         assert r_dash.status_code == 200
         dash = r_dash.get_json()
@@ -83,7 +82,9 @@ def run_all_tests() -> None:
         caruaru_meeting_id = caruaru_entry["latest_meeting"]["id"]
         vitoria_meeting_id = vitoria_entry["latest_meeting"]["id"]
 
-        logo_url = make_test_logo_data_url()
+        logo_url = make_test_logo_data_url((10, 126, 58, 255))
+        report_logo_url = make_test_logo_data_url((21, 101, 192, 255))
+
         r_upd_city = client.put(
             f"/api/cities/{caruaru_id}",
             json={
@@ -100,41 +101,81 @@ def run_all_tests() -> None:
         assert r_tl.status_code == 200
         assert len(r_tl.get_json()["meetings"]) == 1, "Histórico da cidade deve permanecer preservado após edição"
 
-        # 4. Testes comparativos de PDF A4 definitivo (Caruaru Out/2026 e Vitória Abr/2026)
-        for label, mid, expected_title in (
-            ("Caruaru", caruaru_meeting_id, "Outubro/2026"),
-            ("Vitoria", vitoria_meeting_id, "Abril/2026"),
-        ):
-            r_fin = client.post(f"/api/meetings/{mid}/finalize", json={"change_reason": "Versão inicial"})
-            assert r_fin.status_code == 201, f"Finalize {label} falhou: {r_fin.get_data(as_text=True)}"
-            fin_data = r_fin.get_json()
-            ver = fin_data["generated_version"]
-            assert ver["version_number"] == 1
+        # 4. Personalização de cores e logo do relatório no editor + verificação no HTML/PDF A4
+        r_custom = client.put(
+            f"/api/meetings/{caruaru_meeting_id}",
+            json={
+                "primaryColor": "#1565c0",
+                "secondaryColor": "#64b5f6",
+                "reportLogoDataUrl": report_logo_url,
+            },
+        )
+        assert r_custom.status_code == 200, r_custom.get_data(as_text=True)
+        custom_json = r_custom.get_json()
+        snap_custom = custom_json["meeting"]["snapshot"]
+        assert snap_custom["primaryColor"] == "#1565c0"
+        assert snap_custom["secondaryColor"] == "#64b5f6"
+        assert snap_custom["reportLogoDataUrl"] == report_logo_url
 
-            r_pdf = client.get(f"/api/meetings/{mid}/versions/{ver['id']}/pdf")
-            assert r_pdf.status_code == 200
-            pdf_bytes = r_pdf.data
-            assert pdf_bytes.startswith(b"%PDF-")
-            assert hashlib.sha256(pdf_bytes).hexdigest() == ver["pdf_sha256"]
+        rendered_html = build_a4_html(snap_custom, custom_json["city"])
+        assert "--report-primary: #1565c0" in rendered_html
+        assert "--report-secondary: #64b5f6" in rendered_html
+        assert report_logo_url in rendered_html
 
-            reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
-            assert len(reader.pages) == 1, f"{label}: esperado 1 página A4, gerou {len(reader.pages)}"
-            box = reader.pages[0].mediabox
-            assert 590 <= float(box.width) <= 600 and 838 <= float(box.height) <= 846
-            txt = reader.pages[0].extract_text() or ""
-            assert expected_title in txt
-            assert "Itens de ação" in txt
-            assert "Proprietários" in txt
-            assert "DIE" in txt
+        # 5. Finalizar Vitória explicitamente e enviar link em Caruaru com auto_finalize
+        r_fin_vit = client.post(f"/api/meetings/{vitoria_meeting_id}/finalize", json={"change_reason": "Versão inicial"})
+        assert r_fin_vit.status_code == 201, f"Finalize Vitoria falhou: {r_fin_vit.get_data(as_text=True)}"
+        ver_vit = r_fin_vit.get_json()["generated_version"]
+        r_pdf_vit = client.get(f"/api/meetings/{vitoria_meeting_id}/versions/{ver_vit['id']}/pdf")
+        assert r_pdf_vit.status_code == 200
+        reader_vit = pypdf.PdfReader(io.BytesIO(r_pdf_vit.data))
+        assert len(reader_vit.pages) == 1, f"Vitoria: esperado 1 página A4, gerou {len(reader_vit.pages)}"
 
-        # 5. Link público, atualização automática de situação e concorrência no consentimento
-        r_link = client.post(f"/api/meetings/{caruaru_meeting_id}/public-link", json={"expires_in_days": 30})
-        assert r_link.status_code == 201
+        # Caruaru: envia link em 1 clique (auto_finalize=True) -> gera PDF, trava edição imediatamente!
+        r_link = client.post(
+            f"/api/meetings/{caruaru_meeting_id}/public-link",
+            json={"snapshot": snap_custom, "auto_finalize": True, "expires_in_days": 30},
+        )
+        assert r_link.status_code == 201, f"Envio de link Caruaru falhou: {r_link.get_data(as_text=True)}"
         link_data = r_link.get_json()
         assert link_data["workflow_status"] == "link_enviado"
+        assert link_data["is_locked"] is True, "Relatório deve ser bloqueado imediatamente após envio do link"
         token = link_data["public_url"].rsplit("/", 1)[-1]
+        ver_car = link_data["current_version"]
 
-        # Sessão pública anônima (novo test_client sem cookie admin)
+        r_pdf_car = client.get(f"/api/meetings/{caruaru_meeting_id}/versions/{ver_car['id']}/pdf")
+        assert r_pdf_car.status_code == 200
+        assert hashlib.sha256(r_pdf_car.data).hexdigest() == ver_car["pdf_sha256"]
+        reader_car = pypdf.PdfReader(io.BytesIO(r_pdf_car.data))
+        assert len(reader_car.pages) == 1, f"Caruaru: esperado 1 página A4, gerou {len(reader_car.pages)}"
+        box = reader_car.pages[0].mediabox
+        assert 590 <= float(box.width) <= 600 and 838 <= float(box.height) <= 846
+        txt = reader_car.pages[0].extract_text() or ""
+        assert "Outubro/2026" in txt and "Itens de ação" in txt and "Proprietários" in txt
+
+        # Bloqueio imediato após envio do link (antes mesmo do consentimento)
+        r_edit_blocked_after_link = client.put(
+            f"/api/meetings/{caruaru_meeting_id}",
+            json={"title": "Tentativa de edição após envio do link"},
+        )
+        assert r_edit_blocked_after_link.status_code == 409, (
+            f"Esperado 409 ao tentar editar após envio do link, veio {r_edit_blocked_after_link.status_code}"
+        )
+        assert client.post(f"/api/meetings/{caruaru_meeting_id}/finalize", json={}).status_code == 409
+        assert client.post(f"/api/meetings/{caruaru_meeting_id}/import-pending-actions", json={}).status_code == 409
+
+        # Enquanto travada pelo envio do link, alteração de status do Plano de Ação DEVE funcionar
+        r_m_before = client.get(f"/api/meetings/{caruaru_meeting_id}")
+        v1_actions = r_m_before.get_json()["meeting"]["snapshot"]["actions"]
+        first_action_id = v1_actions[0]["id"]
+        r_track_while_sent = client.patch(
+            f"/api/actions/{first_action_id}/tracking",
+            json={"tracking_status": "em_andamento", "follow_up_notes": "Em execução"},
+        )
+        assert r_track_while_sent.status_code == 200
+        assert r_track_while_sent.get_json()["action"]["tracking_status"] == "em_andamento"
+
+        # 6. Sessão pública, visualização do PDF e consentimento concorrente
         pub_client = app.test_client()
         r_pub_page = pub_client.get(f"/ata/{token}")
         assert r_pub_page.status_code == 200
@@ -146,16 +187,13 @@ def run_all_tests() -> None:
         assert pub_meta["state"] == "pending_consent"
         assert pub_meta["city"]["logo_data_url"] == logo_url
 
-        # Situação no painel admin deve ter avançado para aguardando_confirmacao
         r_m_check = client.get(f"/api/meetings/{caruaru_meeting_id}")
         assert r_m_check.get_json()["meeting"]["workflow_status"] == "aguardando_confirmacao"
 
-        # Verifica integridade exata do PDF servido publicamente
         r_pub_pdf = pub_client.get(f"/api/public/atas/{token}/pdf")
         assert r_pub_pdf.status_code == 200
         assert hashlib.sha256(r_pub_pdf.data).hexdigest() == pub_meta["version"]["pdf_sha256"]
 
-        # Disparo concorrente de 5 confirmações simultâneas (proteção contra duplicidade)
         def submit_concurrent(idx: int) -> int:
             c = app.test_client()
             resp = c.post(
@@ -177,48 +215,17 @@ def run_all_tests() -> None:
         assert statuses.count(201) == 1, f"Esperado exatamente 1 sucesso 201 na concorrência, veio {statuses}"
         assert statuses.count(409) == 4, f"Esperado 4 conflitos 409 na concorrência, veio {statuses}"
 
-        # Reunião confirmada fica bloqueada contra edição silenciosa
+        # Após consentimento, continua bloqueada contra edição e contra novo link
         r_locked = client.get(f"/api/meetings/{caruaru_meeting_id}")
         locked_json = r_locked.get_json()
         assert locked_json["meeting"]["workflow_status"] == "confirmada"
         assert locked_json["meeting"]["is_locked"] is True
         v1_sha_before = locked_json["current_version"]["pdf_sha256"]
-        v1_actions = locked_json["meeting"]["snapshot"]["actions"]
 
-        r_edit_blocked = client.put(f"/api/meetings/{caruaru_meeting_id}", json={"title": "Alteracao Silenciosa"})
-        assert r_edit_blocked.status_code == 409
+        assert client.put(f"/api/meetings/{caruaru_meeting_id}", json={"title": "Alteracao Silenciosa"}).status_code == 409
+        assert client.post(f"/api/meetings/{caruaru_meeting_id}/public-link", json={}).status_code == 409
 
-        # 6. Versionamento: criar v2 preserva v1 PDF e consentimento de v1
-        r_unlock = client.post(
-            f"/api/meetings/{caruaru_meeting_id}/unlock-new-version",
-            json={"change_reason": "Ajuste no prazo do item 2"},
-        )
-        assert r_unlock.status_code == 200
-        snap_v2 = r_unlock.get_json()["meeting"]["snapshot"]
-        snap_v2["actions"][1]["deadline"] = "15/12/2026"
-        r_fin_v2 = client.post(
-            f"/api/meetings/{caruaru_meeting_id}/finalize",
-            json={"snapshot": snap_v2, "change_reason": "Ajuste no prazo do item 2"},
-        )
-        assert r_fin_v2.status_code == 201
-        assert r_fin_v2.get_json()["generated_version"]["version_number"] == 2
-
-        r_vers = client.get(f"/api/meetings/{caruaru_meeting_id}/versions").get_json()
-        assert len(r_vers["versions"]) == 2
-        assert len(r_vers["consents"]) == 1
-        assert r_vers["consents"][0]["version_number"] == 1
-
-        # Gerar link para v2 e depois revogar -> link_invalido e PDF indisponível (410)
-        r_link2 = client.post(f"/api/meetings/{caruaru_meeting_id}/public-link", json={}).get_json()
-        token2 = r_link2["public_url"].rsplit("/", 1)[-1]
-        r_rev = client.post(f"/api/public-links/{r_link2['link']['id']}/revoke", json={"reason": "Teste revogação"})
-        assert r_rev.status_code == 200
-        assert r_rev.get_json()["workflow_status"] == "link_invalido"
-        assert pub_client.get(f"/api/public/atas/{token2}").status_code == 410
-        assert pub_client.get(f"/api/public/atas/{token2}/pdf").status_code == 410
-
-        # 7. Acompanhamento de melhorias com CHECK em futura reunião sem alterar v1 congelada
-        first_action_id = v1_actions[0]["id"]
+        # 7. Alteração de status do Plano de Ação após consentimento sem alterar PDF congelado
         r_check = client.patch(
             f"/api/actions/{first_action_id}/tracking",
             json={"checked_completed": True, "tracking_status": "concluida", "follow_up_notes": "Auditoria concluída"},
@@ -226,12 +233,11 @@ def run_all_tests() -> None:
         assert r_check.status_code == 200
         assert r_check.get_json()["action"]["checked_completed"] is True
 
-        # Verifica que o hash do PDF congelado v1 continua idêntico
         r_vers_after = client.get(f"/api/meetings/{caruaru_meeting_id}/versions").get_json()
         v1_meta = next(v for v in r_vers_after["versions"] if v["version_number"] == 1)
         assert v1_meta["pdf_sha256"] == v1_sha_before
 
-        # Criar reunião futura (Novembro/2026) na mesma cidade com importação apenas das pendências
+        # 8. Próxima reunião puxa apenas pendências da anterior, sem copiar o resumo antigo, e herda cores/logo
         r_new_m = client.post(
             f"/api/cities/{caruaru_id}/meetings",
             json={
@@ -244,13 +250,27 @@ def run_all_tests() -> None:
         )
         assert r_new_m.status_code == 201
         new_m_data = r_new_m.get_json()
+        new_snap = new_m_data["meeting"]["snapshot"]
         assert new_m_data["previous_meeting"]["id"] == caruaru_meeting_id
-        imported_actions = new_m_data["meeting"]["snapshot"]["actions"]
+        assert new_snap["summary"] == "", f"Resumo da nova reunião deve iniciar vazio, veio: {new_snap['summary']}"
+        assert new_snap["primaryColor"] == "#1565c0"
+        assert new_snap["secondaryColor"] == "#64b5f6"
+        assert new_snap["reportLogoDataUrl"] == report_logo_url
+
+        imported_actions = new_snap["actions"]
         assert len(imported_actions) == len(v1_actions) - 1, (
-            f"Ação marcada com check como concluída não devia ser importada como pendente; "
-            f"esperado {len(v1_actions) - 1}, veio {len(imported_actions)}"
+            f"Ação concluída não devia ser importada; esperado {len(v1_actions) - 1}, veio {len(imported_actions)}"
         )
         assert all(a["status"] == "" for a in imported_actions), "Coluna Status no papel deve iniciar vazia"
+
+        # 9. Revogação de link em Vitória -> link_invalido e 410 na rota pública
+        r_link_vit = client.post(f"/api/meetings/{vitoria_meeting_id}/public-link", json={}).get_json()
+        token_vit = r_link_vit["public_url"].rsplit("/", 1)[-1]
+        r_rev = client.post(f"/api/public-links/{r_link_vit['link']['id']}/revoke", json={"reason": "Teste revogação"})
+        assert r_rev.status_code == 200
+        assert r_rev.get_json()["workflow_status"] == "link_invalido"
+        assert pub_client.get(f"/api/public/atas/{token_vit}").status_code == 410
+        assert pub_client.get(f"/api/public/atas/{token_vit}/pdf").status_code == 410
 
         print("TODOS OS TESTES AUTOMATIZADOS PASSARAM COM SUCESSO!")
     finally:

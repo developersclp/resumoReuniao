@@ -1,6 +1,25 @@
-// Controlador principal da plataforma Grupo LOCAR — 12 Cidades/Projetos, Atas A4, PDF Congelado e Consentimento
+// Controlador principal — LOCAR Atas & Plano de Ação (fluxo simplificado)
 (function () {
   const $ = (id) => document.getElementById(id);
+
+  const CUSTOM_PALETTES_KEY = "locar_custom_palettes_v1";
+  const DEFAULT_PALETTES = [
+    { name: "LOCAR Verde", primary: "#0a7e3a", secondary: "#b4c85a", builtin: true },
+    { name: "Azul", primary: "#1565c0", secondary: "#64b5f6", builtin: true },
+    { name: "Grafite", primary: "#263238", secondary: "#90a4ae", builtin: true },
+    { name: "Petróleo", primary: "#00695c", secondary: "#80cbc4", builtin: true },
+    { name: "Vinho", primary: "#7b1f3a", secondary: "#e57373", builtin: true },
+    { name: "Laranja", primary: "#d84315", secondary: "#ffb74d", builtin: true }
+  ];
+
+  const STATUS_LABELS = {
+    rascunho: "Em edição",
+    aguardando_envio: "Em edição",
+    link_enviado: "Link enviado",
+    aguardando_confirmacao: "Aguardando confirmação",
+    confirmada: "Confirmada",
+    link_invalido: "Link expirado"
+  };
 
   let currentAdmin = null;
   let citiesList = [];
@@ -15,32 +34,27 @@
   let activeVersions = [];
   let activeLink = null;
   let activeConsents = [];
+  let historyActionRows = [];
 
-  let state = clonePreset("caruaru_out_2026");
+  let state = clonePreset("blank");
   let currentZoom = 0.88;
   let lastTranscriptText = "";
   let dirtyFlag = false;
   let autoSaveTimer = null;
   let pendingCityLogoDataUrl = undefined;
 
-  const STATUS_LABELS = {
-    rascunho: "Aguardando envio",
-    aguardando_envio: "Aguardando envio",
-    link_enviado: "Link enviado",
-    aguardando_confirmacao: "Aguardando confirmação",
-    confirmada: "Confirmada",
-    link_invalido: "Link expirado ou invalidado"
-  };
-
   function clonePreset(presetId) {
-    const src = window.LOCAR_PRESETS[presetId] || window.LOCAR_PRESETS.caruaru_out_2026;
+    const src = window.LOCAR_PRESETS?.[presetId] || window.LOCAR_PRESETS?.blank || {};
     return JSON.parse(
       JSON.stringify({
         ...src,
-        showTopics: typeof src.showTopics === "boolean" ? src.showTopics : true,
-        showKpisOnSheet: typeof src.showKpisOnSheet === "boolean" ? src.showKpisOnSheet : false,
+        showTopics: typeof src.showTopics === "boolean" ? src.showTopics : false,
+        showKpisOnSheet: false,
         densityMode: src.densityMode || "auto",
         headerTheme: src.headerTheme || "die",
+        primaryColor: src.primaryColor || "#0a7e3a",
+        secondaryColor: src.secondaryColor || "#b4c85a",
+        reportLogoDataUrl: src.reportLogoDataUrl || "",
         extraBlankRows: typeof src.extraBlankRows === "number" ? src.extraBlankRows : 1
       })
     );
@@ -52,7 +66,7 @@
     toast.textContent = msg;
     toast.classList.add("show");
     clearTimeout(toast._timer);
-    toast._timer = setTimeout(() => toast.classList.remove("show"), 3400);
+    toast._timer = setTimeout(() => toast.classList.remove("show"), 3200);
   }
 
   function escapeHtml(str) {
@@ -76,15 +90,82 @@
     }
   }
 
-  function formatBytes(bytes) {
-    if (!bytes && bytes !== 0) return "—";
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  function normalizeHex(color, fallback) {
+    const raw = String(color || "").trim();
+    const m = raw.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (!m) return fallback;
+    let hx = m[1];
+    if (hx.length === 3) {
+      hx = hx
+        .split("")
+        .map((c) => c + c)
+        .join("");
+    }
+    return `#${hx.toLowerCase()}`;
+  }
+
+  function hexToRgb(hex) {
+    const clean = normalizeHex(hex, "#0a7e3a").slice(1);
+    return [
+      parseInt(clean.slice(0, 2), 16),
+      parseInt(clean.slice(2, 4), 16),
+      parseInt(clean.slice(4, 6), 16)
+    ];
+  }
+
+  function mixRgb(rgb, target, ratio) {
+    const ch = (i) => Math.max(0, minMax255(Math.round(rgb[i] * (1 - ratio) + target[i] * ratio)));
+    return `#${[ch(0), ch(1), ch(2)].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  function minMax255(n) {
+    return Math.max(0, Math.min(255, n));
+  }
+
+  function applySheetThemeColors(sheet, primaryHex, secondaryHex) {
+    if (!sheet) return;
+    const pHex = normalizeHex(primaryHex, "#0a7e3a");
+    const sHex = normalizeHex(secondaryHex, "#b4c85a");
+    const [pr, pg, pb] = hexToRgb(pHex);
+    const [sr, sg, sb] = hexToRgb(sHex);
+
+    sheet.style.setProperty("--report-primary", pHex);
+    sheet.style.setProperty("--report-primary-dark", mixRgb([pr, pg, pb], [0, 0, 0], 0.22));
+    sheet.style.setProperty("--report-primary-light", mixRgb([pr, pg, pb], [255, 255, 255], 0.14));
+    sheet.style.setProperty("--report-primary-soft", mixRgb([pr, pg, pb], [255, 255, 255], 0.92));
+    sheet.style.setProperty("--report-primary-a44", `rgba(${pr}, ${pg}, ${pb}, 0.44)`);
+    sheet.style.setProperty("--report-primary-a24", `rgba(${pr}, ${pg}, ${pb}, 0.24)`);
+    sheet.style.setProperty("--report-secondary", sHex);
+    sheet.style.setProperty("--report-secondary-a50", `rgba(${sr}, ${sg}, ${sb}, 0.50)`);
+    sheet.style.setProperty("--report-secondary-a36", `rgba(${sr}, ${sg}, ${sb}, 0.36)`);
+  }
+
+  function loadCustomPalettes() {
+    try {
+      const raw = localStorage.getItem(CUSTOM_PALETTES_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveCustomPalettes(list) {
+    try {
+      localStorage.setItem(CUSTOM_PALETTES_KEY, JSON.stringify(list));
+    } catch {
+      // Ignora indisponibilidade de storage
+    }
+  }
+
+  function isMeetingBlocked(meetingObj) {
+    if (!meetingObj) return false;
+    if (meetingObj.is_locked) return true;
+    return ["link_enviado", "aguardando_confirmacao", "confirmada"].includes(meetingObj.workflow_status);
   }
 
   function isMeetingLocked() {
-    return Boolean(activeMeetingMeta && activeMeetingMeta.is_locked);
+    return isMeetingBlocked(activeMeetingMeta);
   }
 
   function setSaveStatus(text, isUnsaved = false) {
@@ -97,11 +178,11 @@
   function markDirtyAndScheduleSave() {
     if (!activeMeetingId || isMeetingLocked()) return;
     dirtyFlag = true;
-    setSaveStatus("Alterações pendentes...", true);
+    setSaveStatus("Salvando...", true);
     clearTimeout(autoSaveTimer);
     autoSaveTimer = setTimeout(() => {
       saveActiveMeeting({ silent: true });
-    }, 900);
+    }, 700);
   }
 
   // -------------------- Autenticação e Shell --------------------
@@ -123,6 +204,7 @@
     $("loginScreen").classList.add("hidden");
     $("appShell").classList.remove("hidden");
     $("adminUserLabel").textContent = user.name;
+    activeView = "dashboard";
     await refreshCitiesAndDashboard();
   }
 
@@ -138,8 +220,6 @@
       renderDashboardView();
     } else if (activeView === "city-history") {
       await loadCityHistoryView();
-    } else if (activeView === "cities") {
-      renderCitiesManageView();
     } else if (activeView === "editor") {
       await loadCityIntoEditor(selectedCityId, activeMeetingId);
     }
@@ -147,6 +227,7 @@
 
   function populateGlobalCitySelect() {
     const sel = $("globalCitySelect");
+    if (!sel) return;
     sel.innerHTML = "";
     citiesList.forEach((c) => {
       const opt = document.createElement("option");
@@ -160,6 +241,9 @@
   }
 
   async function switchView(viewName) {
+    if (activeView === "editor" && dirtyFlag && activeMeetingId && !isMeetingLocked()) {
+      await saveActiveMeeting({ silent: true });
+    }
     activeView = viewName;
     document.querySelectorAll(".nav-pill").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.view === viewName);
@@ -179,11 +263,6 @@
     } else if (viewName === "editor") {
       await loadCityIntoEditor(selectedCityId, activeMeetingId);
       adjustDefaultZoom();
-    } else if (viewName === "cities") {
-      const data = await window.LocarApi.get("/api/cities");
-      citiesList = data.cities || [];
-      populateGlobalCitySelect();
-      renderCitiesManageView();
     }
   }
 
@@ -198,43 +277,12 @@
       await loadCityHistoryView();
     } else if (activeView === "editor") {
       await loadCityIntoEditor(selectedCityId, null);
-    } else if (activeView === "dashboard") {
-      renderDashboardView();
     }
   }
 
-  // -------------------- VISÃO 1: Dashboard Geral --------------------
+  // -------------------- VISÃO 1: Selecionar Cidade --------------------
   function renderDashboardView() {
     if (!dashboardCache) return;
-    const s = dashboardCache.summary || {};
-    const sc = s.status_counts || {};
-
-    $("dashboardKpis").innerHTML = `
-      <div class="summary-stat-card">
-        <div class="summary-stat-label">Cidades / Projetos</div>
-        <div class="summary-stat-value">${s.active_cities ?? 0} / ${s.total_cities ?? 0}</div>
-      </div>
-      <div class="summary-stat-card">
-        <div class="summary-stat-label">Atas Confirmadas</div>
-        <div class="summary-stat-value">${sc.confirmada ?? 0}</div>
-      </div>
-      <div class="summary-stat-card warn">
-        <div class="summary-stat-label">Aguardando Confirmação</div>
-        <div class="summary-stat-value">${sc.aguardando_confirmacao ?? 0}</div>
-      </div>
-      <div class="summary-stat-card info">
-        <div class="summary-stat-label">Link Enviado / Aguardando Envio</div>
-        <div class="summary-stat-value">${sc.link_enviado ?? 0} / ${sc.aguardando_envio ?? 0}</div>
-      </div>
-      <div class="summary-stat-card danger">
-        <div class="summary-stat-label">Links Expirados / Invalidados</div>
-        <div class="summary-stat-value">${sc.link_invalido ?? 0}</div>
-      </div>
-      <div class="summary-stat-card warn">
-        <div class="summary-stat-label">Ações Pendentes / Concluídas</div>
-        <div class="summary-stat-value">${s.pending_actions_total ?? 0} / ${s.completed_actions_total ?? 0}</div>
-      </div>
-    `;
 
     const query = ($("dashSearchInput").value || "").trim().toLowerCase();
     const statusFilter = $("dashStatusFilter").value;
@@ -250,7 +298,7 @@
       return true;
     });
 
-    $("dashCountHint").textContent = `${rows.length} cidade(s) / projeto(s) exibido(s)`;
+    $("dashCountHint").textContent = `${rows.length} cidade(s)`;
     const grid = $("dashboardCitiesGrid");
     grid.innerHTML = "";
 
@@ -258,48 +306,39 @@
       const c = entry.city;
       const lm = entry.latest_meeting;
       const st = lm ? lm.workflow_status : "aguardando_envio";
-      const stLabel = lm ? lm.workflow_label : "Sem reunião";
-      const consent = lm?.latest_consent;
+      const stLabel = lm ? STATUS_LABELS[st] || lm.workflow_label : "Sem reunião";
       const thumbHtml = c.logo_data_url
         ? `<img src="${escapeAttr(c.logo_data_url)}" alt="${escapeAttr(c.name)}" />`
         : escapeHtml((c.project_code || c.name.slice(0, 3)).toUpperCase());
 
       const card = document.createElement("div");
-      card.className = "city-card";
+      card.className = "city-card city-card-simple";
       card.innerHTML = `
         <div class="city-card-top">
           <div class="city-card-identity">
             <div class="city-logo-thumb">${thumbHtml}</div>
             <div>
-              <h3 class="city-card-title">${escapeHtml(c.name)} ${c.state_uf ? "— " + escapeHtml(c.state_uf) : ""}</h3>
-              <div class="city-card-sub">${escapeHtml(c.project_name)} (${escapeHtml(c.project_code || "—")})</div>
+              <h3 class="city-card-title">${escapeHtml(c.name)}${c.state_uf ? " — " + escapeHtml(c.state_uf) : ""}</h3>
+              <div class="city-card-sub">${escapeHtml(c.project_name)}</div>
             </div>
           </div>
           <span class="status-badge ${escapeAttr(st)}">${escapeHtml(stLabel)}</span>
         </div>
 
-        <div class="city-card-meta">
-          <div><strong>Última reunião:</strong> ${lm ? escapeHtml(lm.title) : "Nenhuma ata cadastrada ainda"}</div>
-          <div><strong>Data / Versão:</strong> ${lm ? `${escapeHtml(lm.date_text || lm.meeting_date || "—")} • ${lm.current_version_number ? "v" + lm.current_version_number : "Rascunho"}` : "—"}</div>
-          <div><strong>Consentimento:</strong> ${consent ? `${escapeHtml(consent.representative_name)} (${formatDateTimeBr(consent.accepted_at)})` : "Pendente"}</div>
-          <div><strong>Plano de Ação:</strong> ${entry.completed_actions} concluída(s) • ${entry.pending_actions} pendente(s) • ${entry.meetings_count} reunião(ões)</div>
+        <div class="city-card-summary">
+          <span><strong>${entry.meetings_count}</strong> reunião(ões)</span>
+          <span><strong>${entry.pending_actions}</strong> pendência(s)</span>
         </div>
 
         <div class="city-card-actions">
-          <button type="button" class="btn btn-primary btn-sm js-open-editor">Abrir Editor A4</button>
-          <button type="button" class="btn btn-secondary btn-sm js-open-history">Histórico</button>
-          <button type="button" class="btn btn-outline btn-sm js-edit-city">Configurar Cidade</button>
+          <button type="button" class="btn btn-primary btn-sm js-open-history" style="flex:1;">Ver Reuniões</button>
+          <button type="button" class="btn btn-outline btn-sm js-edit-city">Editar</button>
         </div>
       `;
 
-      card.querySelector(".js-open-editor").addEventListener("click", async () => {
-        selectedCityId = c.id;
-        activeMeetingId = lm ? lm.id : null;
-        populateGlobalCitySelect();
-        await switchView("editor");
-      });
       card.querySelector(".js-open-history").addEventListener("click", async () => {
         selectedCityId = c.id;
+        activeMeetingId = null;
         populateGlobalCitySelect();
         await switchView("city-history");
       });
@@ -308,12 +347,13 @@
     });
   }
 
-  // -------------------- VISÃO 2: Histórico da Cidade Selecionada --------------------
+  // -------------------- VISÃO 2: Reuniões / Histórico da Cidade --------------------
   async function loadCityHistoryView() {
     if (!selectedCityId) return;
     const data = await window.LocarApi.get(`/api/cities/${selectedCityId}/timeline`);
     const city = data.city;
     activeCityObj = city;
+    historyActionRows = data.action_history || [];
 
     const logoHtml = city.logo_data_url
       ? `<img src="${escapeAttr(city.logo_data_url)}" alt="${escapeAttr(city.name)}" />`
@@ -321,199 +361,179 @@
 
     $("cityHistoryHero").innerHTML = `
       <div class="city-hero-left">
+        <button type="button" id="btnHistBackToCities" class="btn btn-outline btn-sm">← Cidades</button>
         <div class="city-hero-logo">${logoHtml}</div>
         <div>
-          <h2 style="margin:0; font-size:19px; color:var(--locar-green-dark);">${escapeHtml(city.name)} (${escapeHtml(city.state_uf || "—")})</h2>
-          <div style="font-size:13px; font-weight:600; color:#324436;">${escapeHtml(city.project_name)} • Código ${escapeHtml(city.project_code || "—")}</div>
-          <div class="hint">${escapeHtml(city.institutional_info || "")}</div>
+          <h2 style="margin:0; font-size:18px; color:var(--locar-green-dark);">${escapeHtml(city.name)}${city.state_uf ? " (" + escapeHtml(city.state_uf) + ")" : ""}</h2>
+          <div style="font-size:12.5px; color:var(--ui-muted);">${escapeHtml(city.project_name)}</div>
         </div>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <span class="action-badge">${(data.meetings || []).length} reunião(ões) registrada(s)</span>
+        <button type="button" id="btnHistEditCity" class="btn btn-outline btn-sm">Editar Cidade</button>
       </div>
     `;
 
-    // Linha do tempo das reuniões
+    $("btnHistBackToCities").addEventListener("click", () => switchView("dashboard"));
+    $("btnHistEditCity").addEventListener("click", () => openCityModal(city));
+
+    renderCityTimelineTable(city, data.meetings || []);
+    renderCityActionTrackerTable();
+  }
+
+  function renderCityTimelineTable(city, meetings) {
     const tbody = $("cityTimelineBody");
     tbody.innerHTML = "";
-    if (!data.meetings || data.meetings.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" class="hint" style="padding:16px;">Nenhuma reunião registrada para esta cidade ainda. Clique em "+ Nova Reunião para esta Cidade".</td></tr>`;
-    } else {
-      data.meetings.forEach((m) => {
-        const consent = m.latest_consent;
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><strong>${escapeHtml(m.title)}</strong><br/><span class="hint">${escapeHtml(m.reference_label || "—")}</span></td>
-          <td>${escapeHtml(m.date_text || m.meeting_date || "—")}</td>
-          <td>${m.current_version_number ? `v${m.current_version_number} (PDF congelado)` : "Rascunho"}</td>
-          <td><span class="status-badge ${escapeAttr(m.workflow_status)}">${escapeHtml(m.workflow_label)}</span></td>
-          <td>${consent ? `<strong>${escapeHtml(consent.representative_name)}</strong><br/><span class="hint">${formatDateTimeBr(consent.accepted_at)} • v${consent.version_number}</span>` : "—"}</td>
-          <td>${m.completed_actions}/${m.total_actions} concluída(s)</td>
-          <td>
-            <div style="display:flex; gap:6px; flex-wrap:wrap;">
-              <button type="button" class="btn btn-primary btn-sm js-tl-open">Abrir no Editor</button>
-              <button type="button" class="btn btn-outline btn-sm js-tl-versions">Versões / Link</button>
-            </div>
-          </td>
+    if (!meetings || meetings.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="hint" style="padding:16px;">Nenhuma reunião criada ainda. Clique em "+ Nova Reunião".</td></tr>`;
+      return;
+    }
+
+    meetings.forEach((m) => {
+      const blocked = isMeetingBlocked(m);
+      const stLabel = STATUS_LABELS[m.workflow_status] || m.workflow_label;
+      const consent = m.latest_consent;
+      const statusDetail = consent
+        ? `<br/><span class="hint">Consentido por ${escapeHtml(consent.representative_name)}</span>`
+        : "";
+
+      const actionsHtml = blocked
+        ? `
+          <button type="button" class="btn btn-secondary btn-sm js-tl-view">Ver Relatório / PDF</button>
+          <button type="button" class="btn btn-outline btn-sm js-tl-link">Link</button>
+        `
+        : `
+          <button type="button" class="btn btn-primary btn-sm js-tl-edit">Editar</button>
+          <button type="button" class="btn btn-outline btn-sm js-tl-send-link">Enviar Link</button>
         `;
-        tr.querySelector(".js-tl-open").addEventListener("click", async () => {
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><strong>${escapeHtml(m.title)}</strong><br/><span class="hint">${escapeHtml(m.reference_label || "—")}</span></td>
+        <td>${escapeHtml(m.date_text || m.meeting_date || "—")}</td>
+        <td><span class="status-badge ${escapeAttr(m.workflow_status)}">${escapeHtml(stLabel)}</span>${statusDetail}</td>
+        <td>${m.completed_actions}/${m.total_actions} concluída(s)</td>
+        <td><div style="display:flex; gap:6px; flex-wrap:wrap;">${actionsHtml}</div></td>
+      `;
+
+      const btnEdit = tr.querySelector(".js-tl-edit");
+      if (btnEdit) {
+        btnEdit.addEventListener("click", async () => {
           activeMeetingId = m.id;
           await switchView("editor");
         });
-        tr.querySelector(".js-tl-versions").addEventListener("click", async () => {
+      }
+
+      const btnSendLink = tr.querySelector(".js-tl-send-link");
+      if (btnSendLink) {
+        btnSendLink.addEventListener("click", async () => {
           activeMeetingId = m.id;
-          await loadCityIntoEditor(city.id, m.id);
-          await openVersionsAuditModal();
+          await loadMeetingIntoEditor(m.id);
+          await sendPublicLinkFromCurrentState();
+          await loadCityHistoryView();
         });
-        tbody.appendChild(tr);
-      });
-    }
+      }
 
-    // Matriz de comparação de indicadores
-    const matrixWrap = $("cityIndicatorMatrixWrap");
-    if (!data.indicator_matrix || data.indicator_matrix.length === 0) {
-      matrixWrap.innerHTML = `<p class="hint">Ainda não há indicadores registrados para comparação nesta cidade.</p>`;
-    } else {
-      const colsHtml = data.indicator_columns
-        .map((col) => `<th>${escapeHtml(col.reference_label)}</th>`)
-        .join("");
-      const rowsHtml = data.indicator_matrix
-        .map((row) => {
-          const cells = row.series
-            .map((cell) => `<td>${escapeHtml(cell.value)}</td>`)
-            .join("");
-          return `<tr><td><strong>${escapeHtml(row.label)}</strong></td>${cells}</tr>`;
-        })
-        .join("");
-      matrixWrap.innerHTML = `
-        <table class="data-table">
-          <thead><tr><th>Indicador</th>${colsHtml}</tr></thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
-      `;
-    }
+      const btnView = tr.querySelector(".js-tl-view");
+      if (btnView) {
+        btnView.addEventListener("click", async () => {
+          activeMeetingId = m.id;
+          await switchView("editor");
+        });
+      }
 
-    // Acompanhamento de melhorias / Check das ações da cidade
+      const btnLink = tr.querySelector(".js-tl-link");
+      if (btnLink) {
+        btnLink.addEventListener("click", async () => {
+          activeMeetingId = m.id;
+          await loadMeetingIntoEditor(m.id);
+          await openPublicLinkModal();
+        });
+      }
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderCityActionTrackerTable() {
     const actBody = $("cityActionTrackerBody");
+    const filterVal = $("historyActionFilter")?.value || "all";
+    const rows = historyActionRows.filter((act) => {
+      if (filterVal === "pending") return !act.checked_completed;
+      if (filterVal === "done") return Boolean(act.checked_completed);
+      return true;
+    });
+
     actBody.innerHTML = "";
-    if (!data.action_history || data.action_history.length === 0) {
-      actBody.innerHTML = `<tr><td colspan="7" class="hint" style="padding:16px;">Nenhuma ação cadastrada nas reuniões desta cidade.</td></tr>`;
-    } else {
-      data.action_history.forEach((act) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><input type="checkbox" class="js-act-chk" ${act.checked_completed ? "checked" : ""} /></td>
-          <td><strong>${escapeHtml(act.reference_label || act.meeting_title)}</strong><br/><span class="hint">${escapeHtml(act.date_text || "")}</span></td>
-          <td>${escapeHtml(act.action)}</td>
-          <td>${escapeHtml(act.owner)}</td>
-          <td>${escapeHtml(act.deadline)}</td>
-          <td>
-            <select class="js-act-status">
-              <option value="pendente" ${act.tracking_status === "pendente" ? "selected" : ""}>Pendente</option>
-              <option value="em_andamento" ${act.tracking_status === "em_andamento" ? "selected" : ""}>Em andamento</option>
-              <option value="concluida" ${act.tracking_status === "concluida" ? "selected" : ""}>Concluída (Realizada)</option>
-              <option value="nao_realizada" ${act.tracking_status === "nao_realizada" ? "selected" : ""}>Não realizada</option>
-            </select>
-          </td>
-          <td>
-            <div style="display:flex; gap:6px;">
-              <input type="text" class="js-act-notes" value="${escapeAttr(act.follow_up_notes || "")}" placeholder="Observação..." style="min-width:160px; padding:4px 7px; border:1px solid var(--ui-border); border-radius:6px;" />
-              <button type="button" class="btn btn-outline btn-sm js-act-save">Salvar</button>
-            </div>
-          </td>
-        `;
-
-        const chk = tr.querySelector(".js-act-chk");
-        const sel = tr.querySelector(".js-act-status");
-        const notes = tr.querySelector(".js-act-notes");
-        const btnSave = tr.querySelector(".js-act-save");
-
-        chk.addEventListener("change", async () => {
-          const checked = chk.checked;
-          sel.value = checked ? "concluida" : "pendente";
-          await saveActionTracking(act.id, {
-            checked_completed: checked,
-            tracking_status: sel.value,
-            follow_up_notes: notes.value
-          });
-        });
-
-        sel.addEventListener("change", async () => {
-          chk.checked = sel.value === "concluida";
-          await saveActionTracking(act.id, {
-            checked_completed: chk.checked,
-            tracking_status: sel.value,
-            follow_up_notes: notes.value
-          });
-        });
-
-        btnSave.addEventListener("click", async () => {
-          await saveActionTracking(act.id, {
-            checked_completed: chk.checked,
-            tracking_status: sel.value,
-            follow_up_notes: notes.value
-          });
-        });
-
-        actBody.appendChild(tr);
-      });
+    if (rows.length === 0) {
+      actBody.innerHTML = `<tr><td colspan="7" class="hint" style="padding:16px;">Nenhuma ação encontrada.</td></tr>`;
+      return;
     }
+
+    rows.forEach((act) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><input type="checkbox" class="js-act-chk" ${act.checked_completed ? "checked" : ""} /></td>
+        <td><strong>${escapeHtml(act.reference_label || act.meeting_title)}</strong></td>
+        <td>${escapeHtml(act.action)}</td>
+        <td>${escapeHtml(act.owner || "—")}</td>
+        <td>${escapeHtml(act.deadline || "—")}</td>
+        <td>
+          <select class="js-act-status">
+            <option value="pendente" ${act.tracking_status === "pendente" ? "selected" : ""}>Pendente</option>
+            <option value="em_andamento" ${act.tracking_status === "em_andamento" ? "selected" : ""}>Em andamento</option>
+            <option value="concluida" ${act.tracking_status === "concluida" ? "selected" : ""}>Concluída</option>
+            <option value="nao_realizada" ${act.tracking_status === "nao_realizada" ? "selected" : ""}>Não realizada</option>
+          </select>
+        </td>
+        <td>
+          <input type="text" class="js-act-notes" value="${escapeAttr(act.follow_up_notes || "")}" placeholder="Observação..." style="min-width:160px; padding:4px 7px; border:1px solid var(--ui-border); border-radius:6px;" />
+        </td>
+      `;
+
+      const chk = tr.querySelector(".js-act-chk");
+      const sel = tr.querySelector(".js-act-status");
+      const notes = tr.querySelector(".js-act-notes");
+
+      const commitRow = async () => {
+        act.checked_completed = chk.checked;
+        act.tracking_status = sel.value;
+        act.follow_up_notes = notes.value;
+        await saveActionTracking(act.id, {
+          checked_completed: act.checked_completed,
+          tracking_status: act.tracking_status,
+          follow_up_notes: act.follow_up_notes
+        });
+      };
+
+      chk.addEventListener("change", async () => {
+        sel.value = chk.checked ? "concluida" : "pendente";
+        await commitRow();
+      });
+
+      sel.addEventListener("change", async () => {
+        chk.checked = sel.value === "concluida";
+        await commitRow();
+      });
+
+      notes.addEventListener("change", commitRow);
+
+      actBody.appendChild(tr);
+    });
   }
 
   async function saveActionTracking(actionId, payload) {
     try {
       await window.LocarApi.patch(`/api/actions/${actionId}/tracking`, payload);
-      showToast("Status de acompanhamento da melhoria atualizado!");
+      showToast("Status do plano de ação atualizado!");
     } catch (err) {
-      showToast("Erro ao salvar acompanhamento: " + err.message);
+      showToast("Erro ao atualizar status: " + err.message);
     }
   }
 
-  // -------------------- VISÃO 4: Cadastro das 12 Cidades / Projetos --------------------
-  function renderCitiesManageView() {
-    const grid = $("citiesManageGrid");
-    grid.innerHTML = "";
-    citiesList.forEach((c) => {
-      const thumbHtml = c.logo_data_url
-        ? `<img src="${escapeAttr(c.logo_data_url)}" alt="${escapeAttr(c.name)}" />`
-        : escapeHtml(c.project_code || "LOCAR");
-
-      const card = document.createElement("div");
-      card.className = "city-card";
-      card.innerHTML = `
-        <div class="city-card-top">
-          <div class="city-card-identity">
-            <div class="city-logo-thumb">${thumbHtml}</div>
-            <div>
-              <h3 class="city-card-title">${escapeHtml(c.name)} ${c.state_uf ? "(" + escapeHtml(c.state_uf) + ")" : ""}</h3>
-              <div class="city-card-sub">${escapeHtml(c.project_name)}</div>
-            </div>
-          </div>
-          <span class="action-badge">${escapeHtml(c.project_code || "#" + c.display_order)}</span>
-        </div>
-        <div class="city-card-meta">
-          <div><strong>Local padrão:</strong> ${escapeHtml(c.default_local || "Microsoft Teams")}</div>
-          <div><strong>Situação:</strong> ${c.is_active ? "Ativa" : "Inativa"} • <strong>Reuniões:</strong> ${c.meetings_count ?? 0}</div>
-          <div><strong>Logotipo:</strong> ${c.has_logo ? "Logotipo cadastrado" : "Não enviado (opcional)"}</div>
-        </div>
-        <div class="city-card-actions">
-          <button type="button" class="btn btn-primary btn-sm js-edit-city-card">Editar Dados &amp; Logotipo</button>
-          <button type="button" class="btn btn-outline btn-sm js-open-city-tl">Ver Histórico</button>
-        </div>
-      `;
-      card.querySelector(".js-edit-city-card").addEventListener("click", () => openCityModal(c));
-      card.querySelector(".js-open-city-tl").addEventListener("click", async () => {
-        selectedCityId = c.id;
-        populateGlobalCitySelect();
-        await switchView("city-history");
-      });
-      grid.appendChild(card);
-    });
-  }
-
+  // -------------------- Modal de Cidade --------------------
   function openCityModal(cityObj = null) {
     pendingCityLogoDataUrl = undefined;
-    $("cityModalTitle").textContent = cityObj ? `Editar Cidade / Projeto — ${cityObj.name}` : "Adicionar Cidade / Projeto";
+    $("cityModalTitle").textContent = cityObj ? `Editar Cidade — ${cityObj.name}` : "Nova Cidade";
     $("cityFormId").value = cityObj ? cityObj.id : "";
     $("cityNameInput").value = cityObj ? cityObj.name : "";
     $("cityUfInput").value = cityObj ? (cityObj.state_uf || "PE") : "PE";
@@ -522,7 +542,6 @@
     $("cityOrderInput").value = cityObj ? (cityObj.display_order || 1) : citiesList.length + 1;
     $("cityLocalInput").value = cityObj ? (cityObj.default_local || "Microsoft Teams") : "Microsoft Teams";
     $("cityFooterInput").value = cityObj ? (cityObj.default_footer || "DIE – Departamento de Inteligência Estratégica") : "DIE – Departamento de Inteligência Estratégica";
-    $("cityInfoInput").value = cityObj ? (cityObj.institutional_info || "") : "";
     $("cityActiveInput").checked = cityObj ? Boolean(cityObj.is_active) : true;
     $("cityLogoInput").value = "";
 
@@ -532,14 +551,15 @@
 
   function updateCityLogoPreview(dataUrl) {
     const box = $("cityLogoPreview");
+    if (!box) return;
     if (dataUrl) {
-      box.innerHTML = `<img src="${escapeAttr(dataUrl)}" alt="Prévia do logotipo" />`;
+      box.innerHTML = `<img src="${escapeAttr(dataUrl)}" alt="Logo" />`;
     } else {
-      box.innerHTML = `<span class="hint">Sem logotipo</span>`;
+      box.innerHTML = `<span class="hint">Sem logo</span>`;
     }
   }
 
-  // -------------------- VISÃO 3: Carregamento de Reunião no Editor A4 --------------------
+  // -------------------- VISÃO 3: Editor / Visualização do Relatório --------------------
   async function loadCityIntoEditor(cityId, preferredMeetingId = null) {
     if (!cityId) return;
     const timeline = await window.LocarApi.get(`/api/cities/${cityId}/timeline`);
@@ -565,7 +585,10 @@
         ...clonePreset("blank"),
         unitName: activeCityObj.name,
         local: activeCityObj.default_local || "Microsoft Teams",
-        footerText: activeCityObj.default_footer || "DIE – Departamento de Inteligência Estratégica"
+        footerText: activeCityObj.default_footer || "DIE – Departamento de Inteligência Estratégica",
+        primaryColor: activeCityObj.default_primary_color || "#0a7e3a",
+        secondaryColor: activeCityObj.default_secondary_color || "#b4c85a",
+        reportLogoDataUrl: activeCityObj.report_logo_data_url || ""
       };
       applyEditorStateToUi();
       return;
@@ -574,7 +597,8 @@
     meetings.forEach((m) => {
       const opt = document.createElement("option");
       opt.value = m.id;
-      opt.textContent = `${m.reference_label || m.title} (${m.current_version_number ? "v" + m.current_version_number : "Rascunho"} • ${m.workflow_label})`;
+      const stLabel = STATUS_LABELS[m.workflow_status] || m.workflow_label;
+      opt.textContent = `${m.reference_label || m.title} (${stLabel})`;
       sel.appendChild(opt);
     });
 
@@ -596,51 +620,126 @@
     activeVersions = data.versions || [];
     activeLink = data.active_link || null;
     activeConsents = data.consents || [];
-    state = data.meeting.snapshot;
+    state = {
+      ...data.meeting.snapshot,
+      primaryColor: data.meeting.snapshot.primaryColor || activeCityObj?.default_primary_color || "#0a7e3a",
+      secondaryColor: data.meeting.snapshot.secondaryColor || activeCityObj?.default_secondary_color || "#b4c85a",
+      reportLogoDataUrl: data.meeting.snapshot.reportLogoDataUrl || ""
+    };
     dirtyFlag = false;
-    setSaveStatus("Sincronizado");
+    setSaveStatus("Salvo");
     applyEditorStateToUi();
   }
 
   function applyEditorStateToUi() {
     const locked = isMeetingLocked();
+    const hasMeeting = Boolean(activeMeetingId);
     const st = activeMeetingMeta ? activeMeetingMeta.workflow_status : "rascunho";
-    const stLabel = activeMeetingMeta ? activeMeetingMeta.workflow_label : "Rascunho local";
+    const stLabel = activeMeetingMeta ? (STATUS_LABELS[st] || activeMeetingMeta.workflow_label) : "Sem reunião";
 
     const badge = $("editorStatusBadge");
     badge.className = `status-badge ${st}`;
-    badge.textContent = activeMeetingMeta && activeMeetingMeta.current_version_number
-      ? `${stLabel} (v${activeMeetingMeta.current_version_number})`
-      : stLabel;
+    badge.textContent = stLabel;
 
-    // Banner de ata confirmada e bloqueada
+    // Sub-barra: alterna modo editável vs bloqueado (opção de editar some)
+    $("editorEditableActions").classList.toggle("hidden", locked || !hasMeeting);
+    $("editorLockedActions").classList.toggle("hidden", !locked || !hasMeeting);
+
+    // Painel esquerdo: abas de edição vs painel exclusivo de status do plano de ação
+    $("editorEditablePanel").classList.toggle("hidden", locked);
+    $("lockedActionsPanel").classList.toggle("hidden", !locked);
+
+    // Banner de bloqueio
     const banner = $("lockedMeetingBanner");
     if (locked) {
       const latestConsent = activeConsents[0];
       const infoText = latestConsent
-        ? `Ata confirmada (v${latestConsent.version_number}) por ${latestConsent.representative_name} (${latestConsent.representative_email}) em ${formatDateTimeBr(latestConsent.accepted_at)} • Protocolo ${latestConsent.protocol_code}.`
-        : "Ata confirmada e congelada para preservação documental.";
+        ? `Confirmada por ${latestConsent.representative_name} (${formatDateTimeBr(latestConsent.accepted_at)}) — edição bloqueada.`
+        : "Link enviado — relatório bloqueado para edição. Apenas o status do plano de ação pode ser alterado.";
       $("lockedMeetingInfo").innerHTML = `<strong>${escapeHtml(infoText)}</strong>`;
       banner.classList.remove("hidden");
+      $("previewToolbarHint").textContent = "Visualização A4 (somente leitura)";
     } else {
       banner.classList.add("hidden");
+      $("previewToolbarHint").textContent = hasMeeting
+        ? "Clique em qualquer texto ou na logo para editar"
+        : "Clique em '+ Nova Reunião' para começar";
     }
 
-    // Habilita/desabilita campos quando bloqueada
-    document.querySelectorAll(".editor-panel input, .editor-panel textarea, .editor-panel select").forEach((el) => {
+    // Desabilita controles se não houver reunião ou se estiver bloqueada
+    document.querySelectorAll("#editorEditablePanel input, #editorEditablePanel textarea, #editorEditablePanel select, #editorEditablePanel button").forEach((el) => {
       if (el.id === "inpGeminiKey") return;
-      el.disabled = locked;
+      if (el.classList.contains("tab-btn")) return;
+      el.disabled = locked || !hasMeeting;
     });
-    ["btnAnalyzeTranscript", "btnAddKpi", "btnAddTopic", "btnAddAction", "btnClearStatuses", "btnSaveMeeting", "btnFinalizePdf", "btnImportPendingActions"].forEach((btnId) => {
-      if ($(btnId)) $(btnId).disabled = locked || !activeMeetingId;
-    });
-    if ($("btnGeneratePublicLink")) {
-      $("btnGeneratePublicLink").disabled = !activeMeetingId;
+
+    if (locked) {
+      renderLockedActionsPanel();
+    } else {
+      renderPreviousMeetingFollowUp();
+      renderEditorInputs();
+    }
+    renderSheet();
+  }
+
+  function renderLockedActionsPanel() {
+    const list = $("lockedActionsList");
+    list.innerHTML = "";
+    const actions = state.actions || [];
+    if (actions.length === 0) {
+      list.innerHTML = `<p class="hint">Nenhum item no plano de ação.</p>`;
+      return;
     }
 
-    renderPreviousMeetingFollowUp();
-    renderEditorInputs();
-    renderSheet();
+    actions.forEach((act) => {
+      const card = document.createElement("div");
+      card.className = `locked-action-card ${act.checked_completed ? "done" : ""}`;
+      card.innerHTML = `
+        <div class="locked-action-title">${escapeHtml(act.action || "Item sem descrição")}</div>
+        <div class="locked-action-meta">Responsável: ${escapeHtml(act.owner || "—")} • Prazo: ${escapeHtml(act.deadline || "—")}</div>
+        <div class="locked-action-controls">
+          <input type="checkbox" class="js-lk-chk" ${act.checked_completed ? "checked" : ""} title="Concluída" />
+          <select class="js-lk-status">
+            <option value="pendente" ${act.tracking_status === "pendente" ? "selected" : ""}>Pendente</option>
+            <option value="em_andamento" ${act.tracking_status === "em_andamento" ? "selected" : ""}>Em andamento</option>
+            <option value="concluida" ${act.tracking_status === "concluida" ? "selected" : ""}>Concluída</option>
+            <option value="nao_realizada" ${act.tracking_status === "nao_realizada" ? "selected" : ""}>Não realizada</option>
+          </select>
+        </div>
+        <input type="text" class="js-lk-notes" value="${escapeAttr(act.follow_up_notes || "")}" placeholder="Observação..." style="padding:5px 8px; border:1px solid var(--ui-border); border-radius:6px; font-size:12px;" />
+      `;
+
+      const chk = card.querySelector(".js-lk-chk");
+      const sel = card.querySelector(".js-lk-status");
+      const notes = card.querySelector(".js-lk-notes");
+
+      const saveRow = async () => {
+        if (!act.id) return;
+        act.checked_completed = chk.checked;
+        act.tracking_status = sel.value;
+        act.follow_up_notes = notes.value;
+        card.classList.toggle("done", act.checked_completed);
+        await saveActionTracking(act.id, {
+          checked_completed: act.checked_completed,
+          tracking_status: act.tracking_status,
+          follow_up_notes: act.follow_up_notes
+        });
+      };
+
+      chk.addEventListener("change", async () => {
+        sel.value = chk.checked ? "concluida" : "pendente";
+        await saveRow();
+      });
+
+      sel.addEventListener("change", async () => {
+        chk.checked = sel.value === "concluida";
+        await saveRow();
+      });
+
+      notes.addEventListener("change", saveRow);
+
+      list.appendChild(card);
+    });
   }
 
   function renderPreviousMeetingFollowUp() {
@@ -653,7 +752,7 @@
     }
 
     box.classList.remove("hidden");
-    $("prevMeetingTitle").textContent = `Acompanhamento — ${activePreviousMeeting.reference_label || activePreviousMeeting.title}`;
+    $("prevMeetingTitle").textContent = `Pendências — ${activePreviousMeeting.reference_label || activePreviousMeeting.title}`;
     list.innerHTML = "";
 
     activePreviousMeeting.actions.forEach((act) => {
@@ -664,7 +763,7 @@
           <input type="checkbox" class="js-prev-chk" ${act.checked_completed ? "checked" : ""} />
           <div>
             <div class="followup-item-title">${escapeHtml(act.action)}</div>
-            <div class="followup-item-meta">Responsáveis: ${escapeHtml(act.owner || "—")} • Prazo: ${escapeHtml(act.deadline || "—")}</div>
+            <div class="followup-item-meta">${escapeHtml(act.owner || "—")} • ${escapeHtml(act.deadline || "—")}</div>
           </div>
         </label>
         <div class="followup-controls">
@@ -674,13 +773,11 @@
             <option value="concluida" ${act.tracking_status === "concluida" ? "selected" : ""}>Concluída</option>
             <option value="nao_realizada" ${act.tracking_status === "nao_realizada" ? "selected" : ""}>Não realizada</option>
           </select>
-          <input type="text" class="js-prev-notes" value="${escapeAttr(act.follow_up_notes || "")}" placeholder="Observação de verificação..." />
         </div>
       `;
 
       const chk = row.querySelector(".js-prev-chk");
       const sel = row.querySelector(".js-prev-status");
-      const notes = row.querySelector(".js-prev-notes");
 
       chk.addEventListener("change", async () => {
         act.checked_completed = chk.checked;
@@ -689,8 +786,7 @@
         row.classList.toggle("done", chk.checked);
         await saveActionTracking(act.id, {
           checked_completed: act.checked_completed,
-          tracking_status: act.tracking_status,
-          follow_up_notes: notes.value
+          tracking_status: act.tracking_status
         });
       });
 
@@ -701,17 +797,7 @@
         row.classList.toggle("done", act.checked_completed);
         await saveActionTracking(act.id, {
           checked_completed: act.checked_completed,
-          tracking_status: act.tracking_status,
-          follow_up_notes: notes.value
-        });
-      });
-
-      notes.addEventListener("change", async () => {
-        act.follow_up_notes = notes.value;
-        await saveActionTracking(act.id, {
-          checked_completed: chk.checked,
-          tracking_status: sel.value,
-          follow_up_notes: notes.value
+          tracking_status: act.tracking_status
         });
       });
 
@@ -726,38 +812,51 @@
       setSaveStatus("Salvando...", true);
       const res = await window.LocarApi.put(`/api/meetings/${activeMeetingId}`, state);
       activeMeetingMeta = res.meeting;
+      activeCityObj = res.city || activeCityObj;
       activeVersions = res.versions || [];
       activeLink = res.active_link || null;
       activeConsents = res.consents || [];
+      // Sincroniza IDs gerados para novas ações sem perder edição ativa
+      if (Array.isArray(res.meeting?.snapshot?.actions)) {
+        state.actions = res.meeting.snapshot.actions;
+      }
       dirtyFlag = false;
-      setSaveStatus("Salvo no banco");
+      setSaveStatus("Salvo");
       if (!opts.silent) {
-        showToast("Alterações da ata salvas no banco de dados!");
+        showToast("Relatório salvo!");
       }
       return res;
     } catch (err) {
       setSaveStatus("Erro ao salvar", true);
       if (!opts.silent) {
-        showToast("Erro ao salvar reunião: " + err.message);
+        showToast("Erro ao salvar: " + err.message);
       }
       return null;
     }
   }
 
-  // -------------------- Renderização da Folha A4 (Preservada Integralmente) --------------------
+  // -------------------- Renderização da Folha A4 --------------------
   function renderSheet() {
     const sheet = $("a4Sheet");
     const isDieTheme = state.headerTheme !== "locar";
     sheet.classList.toggle("theme-locar", !isDieTheme);
 
+    const primaryHex = normalizeHex(state.primaryColor, "#0a7e3a");
+    const secondaryHex = normalizeHex(state.secondaryColor, "#b4c85a");
+    applySheetThemeColors(sheet, primaryHex, secondaryHex);
+
+    const hasCustomLogo = Boolean((state.reportLogoDataUrl || "").trim());
+    sheet.classList.toggle("has-custom-report-logo", hasCustomLogo);
+
     const logoImg = $("sheetLogoImg");
-    if (window.LOCAR_LOGOS) {
+    if (hasCustomLogo) {
+      logoImg.src = state.reportLogoDataUrl;
+    } else if (window.LOCAR_LOGOS) {
       logoImg.src = isDieTheme ? window.LOCAR_LOGOS.white : window.LOCAR_LOGOS.color;
     } else {
       logoImg.src = isDieTheme ? "assets/logo-locar-white.png" : "assets/logo-locar.png";
     }
 
-    // Logotipo individual da cidade (exibido apenas se cadastrado)
     const cityLogoBox = $("sheetCityLogoBox");
     const cityLogoImg = $("sheetCityLogoImg");
     if (cityLogoBox && cityLogoImg) {
@@ -778,7 +877,8 @@
         (totalRows >= 8 || (state.showTopics && (state.topics?.length || 0) > 0 && totalRows >= 6)));
     sheet.classList.toggle("density-compact", shouldCompact);
 
-    const locked = isMeetingLocked();
+    const editable = !isMeetingLocked() && Boolean(activeMeetingId);
+    sheet.dataset.editable = editable ? "true" : "false";
     const editableIds = [
       "sheetUnitName",
       "sheetLocal",
@@ -790,7 +890,7 @@
       "sheetFooter"
     ];
     editableIds.forEach((id) => {
-      if ($(id)) $(id).contentEditable = locked ? "false" : "true";
+      if ($(id)) $(id).contentEditable = editable ? "true" : "false";
     });
 
     setEditableText($("sheetUnitName"), state.unitName || activeCityObj?.name || "Unidade");
@@ -817,49 +917,33 @@
       topicsBox.style.display = "none";
     }
 
-    const kpiBox = $("sheetKpis");
-    if (state.showKpisOnSheet && Array.isArray(state.indicators) && state.indicators.length > 0) {
-      kpiBox.style.display = "grid";
-      kpiBox.innerHTML = "";
-      state.indicators.slice(0, 8).forEach((kpi) => {
-        const card = document.createElement("div");
-        card.className = "sheet-kpi-item";
-        card.innerHTML = `
-          <div class="sheet-kpi-label">${escapeHtml(kpi.label)}</div>
-          <div class="sheet-kpi-val">${escapeHtml(kpi.value)}</div>
-        `;
-        kpiBox.appendChild(card);
-      });
-    } else {
-      kpiBox.style.display = "none";
-    }
-
     const tbody = $("sheetActionBody");
     tbody.innerHTML = "";
 
     (state.actions || []).forEach((item, idx) => {
       const tr = document.createElement("tr");
 
-      const tdAction = createEditableCell(item.action, locked, (val) => {
+      const tdAction = createEditableCell(item.action, !editable, (val) => {
         state.actions[idx].action = val;
         syncActionInput(idx, "action", val);
         markDirtyAndScheduleSave();
       });
 
-      const tdOwner = createEditableCell(item.owner, locked, (val) => {
+      const tdOwner = createEditableCell(item.owner, !editable, (val) => {
         state.actions[idx].owner = val;
         syncActionInput(idx, "owner", val);
         markDirtyAndScheduleSave();
       });
 
-      const tdDeadline = createEditableCell(item.deadline, locked, (val) => {
+      const tdDeadline = createEditableCell(item.deadline, !editable, (val) => {
         state.actions[idx].deadline = val;
         syncActionInput(idx, "deadline", val);
         markDirtyAndScheduleSave();
       });
 
-      const tdStatus = createEditableCell(item.status || "", locked, (val) => {
+      const tdStatus = createEditableCell(item.status || "", !editable, (val) => {
         state.actions[idx].status = val;
+        syncActionInput(idx, "status", val);
         markDirtyAndScheduleSave();
       });
 
@@ -909,44 +993,89 @@
     $("inpTitle").value = state.title || "";
     $("inpSummary").value = state.summary || "";
     $("inpFooter").value = state.footerText || "";
-    $("chkShowTopics").checked = !!state.showTopics;
-    $("chkShowKpis").checked = !!state.showKpisOnSheet;
+    $("chkShowTopics").checked = Boolean(state.showTopics);
     $("selHeaderTheme").value = state.headerTheme || "die";
     $("selDensity").value = state.densityMode || "auto";
     $("inpBlankRows").value = state.extraBlankRows ?? 1;
 
-    renderKpiEditor();
+    const pHex = normalizeHex(state.primaryColor, "#0a7e3a");
+    const sHex = normalizeHex(state.secondaryColor, "#b4c85a");
+    $("inpPrimaryColor").value = pHex;
+    $("inpPrimaryColorHex").value = pHex;
+    $("inpSecondaryColor").value = sHex;
+    $("inpSecondaryColorHex").value = sHex;
+
+    renderLogoPreviews();
+    renderColorPalettes();
     renderTopicsEditor();
     renderActionsEditor();
   }
 
-  function renderKpiEditor() {
-    const container = $("kpiEditorList");
-    container.innerHTML = "";
-    const locked = isMeetingLocked();
-    if (!state.indicators || state.indicators.length === 0) {
-      container.innerHTML =
-        '<p class="hint">Nenhum indicador extraído ainda. Suba a transcrição ou o arquivo CSV de indicadores.</p>';
-      return;
+  function renderLogoPreviews() {
+    const repBox = $("reportLogoPreview");
+    if (repBox) {
+      const customSrc = (state.reportLogoDataUrl || "").trim();
+      const previewSrc = customSrc || window.LOCAR_LOGOS?.color || "assets/logo-locar.png";
+      repBox.innerHTML = `<img src="${escapeAttr(previewSrc)}" alt="Logo do Relatório" />`;
     }
-    state.indicators.forEach((kpi, idx) => {
-      const chip = document.createElement("div");
-      chip.className = `kpi-chip ${kpi.status || "ok"}`;
-      chip.innerHTML = `
-        <div class="kpi-chip-label">${escapeHtml(kpi.label)}</div>
-        <div class="kpi-chip-value">${escapeHtml(kpi.value)}</div>
-        ${locked ? "" : '<button type="button" class="icon-btn del" title="Remover indicador" style="position:absolute;top:5px;right:5px;width:20px;height:20px;font-size:10px;">✕</button>'}
-      `;
-      const btn = chip.querySelector("button");
-      if (btn) {
-        btn.addEventListener("click", () => {
-          state.indicators.splice(idx, 1);
-          renderKpiEditor();
-          renderSheet();
-          markDirtyAndScheduleSave();
-        });
+
+    const cityBox = $("editorCityLogoPreview");
+    if (cityBox) {
+      const citySrc = activeCityObj?.logo_data_url || "";
+      if (citySrc) {
+        cityBox.innerHTML = `<img src="${escapeAttr(citySrc)}" alt="Logo da Cidade" />`;
+      } else {
+        cityBox.innerHTML = `<span class="hint">Sem logo</span>`;
       }
-      container.appendChild(chip);
+    }
+  }
+
+  function renderColorPalettes() {
+    const container = $("colorPaletteSwatches");
+    if (!container) return;
+    const currentP = normalizeHex(state.primaryColor, "#0a7e3a");
+    const currentS = normalizeHex(state.secondaryColor, "#b4c85a");
+    const customList = loadCustomPalettes().map((p, i) => ({ ...p, builtin: false, customIdx: i }));
+    const allPalettes = [...DEFAULT_PALETTES, ...customList];
+
+    container.innerHTML = "";
+    allPalettes.forEach((pal) => {
+      const isActive =
+        normalizeHex(pal.primary, "") === currentP &&
+        normalizeHex(pal.secondary, "") === currentS;
+      const btn = document.createElement("div");
+      btn.className = `palette-swatch ${isActive ? "active" : ""}`;
+      btn.title = `${pal.name} (${pal.primary} / ${pal.secondary})`;
+      btn.innerHTML = `
+        <span class="palette-dots">
+          <span class="palette-dot" style="background:${escapeAttr(pal.primary)};"></span>
+          <span class="palette-dot" style="background:${escapeAttr(pal.secondary)};"></span>
+        </span>
+        <span>${escapeHtml(pal.name)}</span>
+        ${pal.builtin ? "" : '<button type="button" class="palette-swatch-del" title="Remover cor">✕</button>'}
+      `;
+
+      btn.addEventListener("click", (e) => {
+        if (e.target.classList.contains("palette-swatch-del")) {
+          const list = loadCustomPalettes();
+          list.splice(pal.customIdx, 1);
+          saveCustomPalettes(list);
+          renderColorPalettes();
+          return;
+        }
+        if (isMeetingLocked()) return;
+        state.primaryColor = normalizeHex(pal.primary, "#0a7e3a");
+        state.secondaryColor = normalizeHex(pal.secondary, "#b4c85a");
+        $("inpPrimaryColor").value = state.primaryColor;
+        $("inpPrimaryColorHex").value = state.primaryColor;
+        $("inpSecondaryColor").value = state.secondaryColor;
+        $("inpSecondaryColorHex").value = state.secondaryColor;
+        renderColorPalettes();
+        renderSheet();
+        markDirtyAndScheduleSave();
+      });
+
+      container.appendChild(btn);
     });
   }
 
@@ -960,14 +1089,14 @@
       card.innerHTML = `
         <div class="action-card-header">
           <span class="action-badge">Tópico ${idx + 1}</span>
-          <button type="button" class="icon-btn del" title="Excluir tópico" ${locked ? "disabled" : ""}>✕</button>
+          <button type="button" class="icon-btn del" title="Excluir" ${locked ? "disabled" : ""}>✕</button>
         </div>
         <div class="field">
           <label>Área / Tema</label>
           <input type="text" class="topic-area-inp" value="${escapeAttr(t.area)}" ${locked ? "disabled" : ""} />
         </div>
         <div class="field" style="margin-bottom:0;">
-          <label>Destaques</label>
+          <label>Detalhes</label>
           <textarea rows="2" class="topic-text-inp" ${locked ? "disabled" : ""}>${escapeHtml(t.text)}</textarea>
         </div>
       `;
@@ -1002,13 +1131,16 @@
       const card = document.createElement("div");
       card.className = "action-editor-card";
       card.dataset.idx = idx;
+      const fromPrevBadge = item.origin_action_id
+        ? ' <span style="font-size:10px; color:#5a695d;">(pendente anterior)</span>'
+        : "";
       card.innerHTML = `
         <div class="action-card-header">
-          <span class="action-badge">Ação #${idx + 1}</span>
+          <span class="action-badge">Ação #${idx + 1}${fromPrevBadge}</span>
           <div class="action-card-controls">
-            <button type="button" class="icon-btn up" title="Mover para cima" ${locked ? "disabled" : ""}>↑</button>
-            <button type="button" class="icon-btn down" title="Mover para baixo" ${locked ? "disabled" : ""}>↓</button>
-            <button type="button" class="icon-btn del" title="Remover ação" ${locked ? "disabled" : ""}>✕</button>
+            <button type="button" class="icon-btn up" title="Subir" ${locked ? "disabled" : ""}>↑</button>
+            <button type="button" class="icon-btn down" title="Descer" ${locked ? "disabled" : ""}>↓</button>
+            <button type="button" class="icon-btn del" title="Remover" ${locked ? "disabled" : ""}>✕</button>
           </div>
         </div>
         <div class="field">
@@ -1016,14 +1148,18 @@
           <textarea rows="2" class="act-action" ${locked ? "disabled" : ""}>${escapeHtml(item.action)}</textarea>
         </div>
         <div class="field-row">
-          <div class="field" style="margin-bottom:0;">
+          <div class="field">
             <label>Proprietários</label>
             <input type="text" class="act-owner" value="${escapeAttr(item.owner)}" ${locked ? "disabled" : ""} />
           </div>
-          <div class="field" style="margin-bottom:0;">
+          <div class="field">
             <label>Prazo</label>
             <input type="text" class="act-deadline" value="${escapeAttr(item.deadline)}" ${locked ? "disabled" : ""} />
           </div>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label>Status na folha (opcional)</label>
+          <input type="text" class="act-status" value="${escapeAttr(item.status || "")}" placeholder="Deixe vazio para preencher depois" ${locked ? "disabled" : ""} />
         </div>
       `;
 
@@ -1069,6 +1205,12 @@
         markDirtyAndScheduleSave();
       });
 
+      card.querySelector(".act-status").addEventListener("input", (e) => {
+        state.actions[idx].status = e.target.value;
+        renderSheet();
+        markDirtyAndScheduleSave();
+      });
+
       container.appendChild(card);
     });
   }
@@ -1076,22 +1218,25 @@
   function syncActionInput(idx, field, val) {
     const card = document.querySelector(`.action-editor-card[data-idx="${idx}"]`);
     if (!card) return;
-    const selector = field === "action" ? ".act-action" : field === "owner" ? ".act-owner" : ".act-deadline";
-    const el = card.querySelector(selector);
+    const map = {
+      action: ".act-action",
+      owner: ".act-owner",
+      deadline: ".act-deadline",
+      status: ".act-status"
+    };
+    const el = card.querySelector(map[field] || ".act-action");
     if (el && document.activeElement !== el) {
       el.value = val;
     }
   }
 
-  // -------------------- Upload & Análise Microsoft Teams (Preservado) --------------------
+  // -------------------- Upload & Análise de Reunião --------------------
   function setupDropzone(zoneId, inputId, handler) {
     const zone = $(zoneId);
     const input = $(inputId);
+    if (!zone || !input) return;
     zone.addEventListener("click", () => {
-      if (isMeetingLocked()) {
-        showToast("Ata confirmada está travada. Crie uma nova versão para editar.");
-        return;
-      }
+      if (isMeetingLocked() || !activeMeetingId) return;
       input.click();
     });
     input.addEventListener("change", (e) => {
@@ -1108,7 +1253,7 @@
     zone.addEventListener("drop", (e) => {
       e.preventDefault();
       zone.classList.remove("dragover");
-      if (isMeetingLocked()) return;
+      if (isMeetingLocked() || !activeMeetingId) return;
       if (e.dataTransfer.files && e.dataTransfer.files[0]) {
         handler(e.dataTransfer.files[0]);
       }
@@ -1138,15 +1283,15 @@
       }
 
       const statusEl = $("attendanceStatus");
-      statusEl.textContent = `✓ ${file.name} — ${parsed.participantsList.length} participantes extraídos (${parsed.unitName || "Reunião"}).`;
+      statusEl.textContent = `✓ ${file.name} — ${parsed.participantsList.length} participantes.`;
       statusEl.classList.add("visible");
 
       renderEditorInputs();
       renderSheet();
       markDirtyAndScheduleSave();
-      showToast(`Presença importada: ${parsed.participantsList.length} participantes!`);
+      showToast(`Presença importada (${parsed.participantsList.length} participantes).`);
     } catch (err) {
-      showToast("Erro ao ler relatório de presença: " + err.message);
+      showToast("Erro ao ler presença: " + err.message);
     }
   }
 
@@ -1155,19 +1300,18 @@
     try {
       const ext = file.name.split(".").pop().toLowerCase();
       let text = "";
+      const buf = await file.arrayBuffer();
       if (ext === "docx") {
-        const buf = await file.arrayBuffer();
         text = await window.LocarParser.extractTextFromDocx(buf);
       } else {
-        const buf = await file.arrayBuffer();
         text = window.LocarParser.decodeFileBuffer(buf);
       }
       lastTranscriptText = text;
       $("inpTranscriptPaste").value =
-        text.slice(0, 20000) + (text.length > 20000 ? "\n\n[...texto completo carregado em memória para análise...]" : "");
+        text.slice(0, 20000) + (text.length > 20000 ? "\n\n[...texto carregado...]" : "");
 
       const statusEl = $("transcriptStatus");
-      statusEl.textContent = `✓ ${file.name} carregado (${Math.round(text.length / 1024)} KB).`;
+      statusEl.textContent = `✓ ${file.name} carregado.`;
       statusEl.classList.add("visible");
 
       await processTranscriptText(text);
@@ -1176,54 +1320,20 @@
     }
   }
 
-  async function handleIndicatorsUpload(file) {
-    if (isMeetingLocked()) return;
-    try {
-      const buf = await file.arrayBuffer();
-      const text = window.LocarParser.decodeFileBuffer(buf);
-      const ext = file.name.split(".").pop().toLowerCase();
-
-      let kpis = [];
-      if (ext === "json") {
-        const parsed = JSON.parse(text);
-        if (Array.isArray(parsed)) kpis = parsed;
-      } else {
-        kpis = window.LocarParser.parseIndicatorsCSV(text);
-      }
-
-      if (kpis.length === 0) {
-        showToast("Não foram encontrados indicadores no formato esperado (Indicador; Valor; Status).");
-        return;
-      }
-
-      state.indicators = kpis;
-      const statusEl = $("indicatorsStatus");
-      statusEl.textContent = `✓ ${file.name} — ${kpis.length} indicadores importados.`;
-      statusEl.classList.add("visible");
-
-      renderEditorInputs();
-      renderSheet();
-      markDirtyAndScheduleSave();
-      showToast(`${kpis.length} indicadores carregados no relatório!`);
-    } catch (err) {
-      showToast("Erro ao ler arquivo de indicadores: " + err.message);
-    }
-  }
-
   async function processTranscriptText(textOverride) {
-    if (isMeetingLocked()) return;
+    if (isMeetingLocked() || !activeMeetingId) return;
     const raw = (textOverride || lastTranscriptText || $("inpTranscriptPaste").value || "").trim();
     if (!raw) {
-      showToast("Suba ou cole uma transcrição do Teams antes de analisar.");
+      showToast("Suba ou cole o texto da reunião antes de gerar o resumo.");
       return;
     }
     lastTranscriptText = raw;
 
-    const apiKey = ($("inpGeminiKey").value || "").trim();
+    const apiKey = ($("inpGeminiKey")?.value || "").trim();
     const btn = $("btnAnalyzeTranscript");
     const oldLabel = btn.textContent;
     btn.disabled = true;
-    btn.textContent = apiKey ? "Analisando com IA Gemini..." : "Analisando transcrição...";
+    btn.textContent = apiKey ? "Analisando com IA..." : "Gerando resumo...";
 
     try {
       let result;
@@ -1241,7 +1351,8 @@
         result = window.LocarParser.analyzeTranscript(raw, {
           unitName: state.unitName,
           dateText: state.dateText,
-          timeText: state.timeText
+          timeText: state.timeText,
+          participants: state.participants
         });
         if (result.title) state.title = result.title;
         if (result.refMonthYear) state.referenceLabel = result.refMonthYear;
@@ -1252,16 +1363,28 @@
       if (result.timeText && !state.timeText) state.timeText = result.timeText;
       if (result.participantsText && !state.participants) state.participants = result.participantsText;
       if (result.summary) state.summary = result.summary;
-      if (Array.isArray(result.topics) && result.topics.length > 0) state.topics = result.topics;
-      if (Array.isArray(result.indicators) && result.indicators.length > 0) state.indicators = result.indicators;
-      if (Array.isArray(result.actions) && result.actions.length > 0) {
-        state.actions = result.actions.map((a) => ({ ...a, status: "" }));
+      if (Array.isArray(result.topics) && result.topics.length > 0) {
+        state.topics = result.topics;
       }
+
+      // Preserva pendências puxadas da reunião anterior e adiciona novas ações extraídas
+      const inheritedActions = (state.actions || []).filter(
+        (a) => a.origin_action_id && (a.action || "").trim().length > 0
+      );
+      const existingActionTexts = new Set(
+        inheritedActions.map((a) => (a.action || "").trim().toLowerCase())
+      );
+      const extracted = (Array.isArray(result.actions) ? result.actions : [])
+        .map((a) => ({ ...a, status: "" }))
+        .filter((a) => (a.action || "").trim() && !existingActionTexts.has((a.action || "").trim().toLowerCase()));
+
+      state.actions = [...inheritedActions, ...extracted];
+      state.indicators = [];
 
       renderEditorInputs();
       renderSheet();
-      markDirtyAndScheduleSave();
-      showToast(`Análise concluída: ${state.actions.length} itens de ação gerados (Status vazio p/ papel).`);
+      await saveActiveMeeting({ silent: true });
+      showToast(`Resumo e plano de ação gerados (${state.actions.length} ações).`);
     } catch (err) {
       showToast("Erro na análise: " + err.message);
     } finally {
@@ -1270,16 +1393,17 @@
     }
   }
 
-  // -------------------- Exportações (.doc / .json / Print PDF) --------------------
+  // -------------------- Exportação Word (.doc) --------------------
   function exportToWord() {
-    const logoSrc = window.LOCAR_LOGOS?.color || "assets/logo-locar.png";
+    const primaryHex = normalizeHex(state.primaryColor, "#0a7e3a");
+    const logoSrc = (state.reportLogoDataUrl || "").trim() || window.LOCAR_LOGOS?.color || "assets/logo-locar.png";
     const cityLogoHtml = activeCityObj?.logo_data_url
-      ? `<img src="${escapeAttr(activeCityObj.logo_data_url)}" width="95" alt="Logotipo da Cidade" style="display:block; margin-bottom:6px;" />`
+      ? `<img src="${escapeAttr(activeCityObj.logo_data_url)}" width="95" alt="Logo Cidade" style="display:block; margin-bottom:6px;" />`
       : "";
     const topicsHtml =
       state.showTopics && state.topics?.length
-        ? `<div style="margin:8px 0 12px 20px; padding:8px 12px; background:#f2f9f4; border-left:3.5px solid #0a7e3a; font-size:9.5pt;">
-             <div style="font-weight:bold; color:#075b29; margin-bottom:4px;">PRINCIPAIS TÓPICOS E ASSUNTOS DESTACADOS</div>
+        ? `<div style="margin:8px 0 12px 20px; padding:8px 12px; background:#f2f9f4; border-left:3.5px solid ${primaryHex}; font-size:9.5pt;">
+             <div style="font-weight:bold; color:${primaryHex}; margin-bottom:4px;">PRINCIPAIS TÓPICOS E ASSUNTOS DESTACADOS</div>
              ${state.topics
                .map((t) => `<div><b>${escapeHtml(t.area)}:</b> ${escapeHtml(t.text)}</div>`)
                .join("")}
@@ -1314,12 +1438,12 @@
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="utf-8"><title>${escapeHtml(state.title)}</title></head>
 <body style="font-family: Calibri, Arial, sans-serif; color:#1f2421; margin:20px;">
-  <table width="100%" cellspacing="0" cellpadding="6" style="background:#0a7e3a; color:#ffffff; margin-bottom:12px;">
+  <table width="100%" cellspacing="0" cellpadding="6" style="background:${primaryHex}; color:#ffffff; margin-bottom:12px;">
     <tr><td align="right" style="font-size:12pt; font-weight:bold;">${escapeHtml(state.unitName)}</td></tr>
   </table>
   <table width="100%" cellspacing="0" cellpadding="4" style="margin-bottom:12px;">
     <tr>
-      <td width="38%" valign="top"><img src="${logoSrc}" width="170" alt="LOCAR Gestão de Resíduos" /></td>
+      <td width="38%" valign="top"><img src="${escapeAttr(logoSrc)}" width="170" alt="Logo" /></td>
       <td width="48%" valign="top" style="font-size:9.5pt; line-height:1.4;">
         <div><b>Local:</b> ${escapeHtml(state.local)}</div>
         <div><b>Data:</b> ${escapeHtml(state.dateText)}</div>
@@ -1352,282 +1476,131 @@
 
     const blob = new Blob(["\ufeff", html], { type: "application/msword" });
     const fileSlug = (state.unitName || "locar").toLowerCase().replace(/[^a-z0-9]+/gi, "_");
-    downloadBlob(blob, `ata_indicadores_${fileSlug}.doc`);
-    showToast("Documento Word (.doc) exportado!");
-  }
-
-  function exportJSON() {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-    const fileSlug = (state.unitName || "locar").toLowerCase().replace(/[^a-z0-9]+/gi, "_");
-    downloadBlob(blob, `ata_${fileSlug}.json`);
-    showToast("Projeto salvo em JSON!");
-  }
-
-  function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = filename;
+    a.download = `ata_${fileSlug}.doc`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+    showToast("Word exportado!");
   }
 
-  // -------------------- Fluxo de PDF Definitivo, Link Público & Versões --------------------
-  async function finalizeMeetingPdf() {
+  // -------------------- Envio do Link & Bloqueio Imediato --------------------
+  async function sendPublicLinkFromCurrentState() {
     if (!activeMeetingId) return;
     if (isMeetingLocked()) {
-      showToast("Esta ata já foi confirmada. Clique em 'Criar Nova Versão para Correção' primeiro.");
+      await openPublicLinkModal();
       return;
     }
-    const btn = $("btnFinalizePdf");
-    const oldText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = "Gerando PDF A4...";
+
+    const btn = $("btnGeneratePublicLink");
+    const oldText = btn ? btn.textContent : "Enviar Link";
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Gerando link...";
+    }
+
     try {
-      const reason = activeMeetingMeta?.current_version_number
-        ? (window.prompt("Descreva o motivo desta nova versão (opcional):", `Revisão v${activeMeetingMeta.current_version_number + 1}`) || "")
-        : "Versão inicial definitiva";
-      const res = await window.LocarApi.post(`/api/meetings/${activeMeetingId}/finalize`, {
+      const res = await window.LocarApi.post(`/api/meetings/${activeMeetingId}/public-link`, {
         snapshot: state,
-        change_reason: reason
+        auto_finalize: true,
+        expires_in_days: 30
       });
-      activeMeetingMeta = res.meeting;
-      activeVersions = res.versions || [];
-      activeLink = res.active_link || null;
-      activeConsents = res.consents || [];
-      dirtyFlag = false;
-      setSaveStatus("PDF definitivo congelado");
-      applyEditorStateToUi();
-      await loadCityIntoEditor(selectedCityId, activeMeetingId);
-      showToast(`PDF v${res.generated_version.version_number} gerado e congelado com sucesso!`);
+      if (res.public_url) {
+        await window.LocarApi.copyToClipboard(res.public_url).catch(() => {});
+      }
+      await loadMeetingIntoEditor(activeMeetingId);
+      const sel = $("selCityMeeting");
+      if (sel && sel.selectedIndex >= 0) {
+        sel.options[sel.selectedIndex].textContent = `${state.referenceLabel || state.title} (${STATUS_LABELS.link_enviado})`;
+      }
+      showToast("Link gerado e copiado! Edição do relatório bloqueada.");
+      await openPublicLinkModal();
     } catch (err) {
-      showToast("Erro ao finalizar PDF: " + err.message);
+      showToast("Erro ao gerar link: " + err.message);
     } finally {
-      btn.disabled = false;
-      btn.textContent = oldText;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = oldText;
+      }
     }
   }
 
   async function openPublicLinkModal() {
     if (!activeMeetingId) return;
-    if (dirtyFlag && !isMeetingLocked()) {
-      await saveActiveMeeting({ silent: true });
-    }
     const data = await window.LocarApi.get(`/api/meetings/${activeMeetingId}/versions`);
     activeVersions = data.versions || [];
     const currentVer = activeVersions.find((v) => v.is_current);
     activeLink = (data.links || []).find((l) => l.status === "active") || null;
 
     const body = $("publicLinkBody");
-    if (!currentVer) {
-      body.innerHTML = `
-        <div class="login-note" style="margin-top:0;">
-          <strong>PDF definitivo ainda não gerado.</strong><br/>
-          Antes de gerar o link para assinatura do representante da cidade, finalize e congele a versão definitiva do PDF desta ata.
-        </div>
-        <div style="margin-top:14px;">
-          <button type="button" id="btnModalFinalizeNow" class="btn btn-primary">Finalizar Ata em PDF Agora</button>
-        </div>
-      `;
-      $("btnModalFinalizeNow").addEventListener("click", async () => {
-        $("modalPublicLink").classList.add("hidden");
-        await finalizeMeetingPdf();
-        if (activeMeetingMeta?.has_frozen_pdf) {
-          await openPublicLinkModal();
-        }
-      });
-      $("modalPublicLink").classList.remove("hidden");
-      return;
-    }
+    const confirmed = activeMeetingMeta?.workflow_status === "confirmada" || currentVer?.has_consent;
 
-    if (currentVer.has_consent || isMeetingLocked()) {
-      const consent = (data.consents || []).find((c) => c.version_number === currentVer.version_number) || data.consents?.[0];
+    if (confirmed) {
+      const consent = (data.consents || []).find((c) => c.version_number === currentVer?.version_number) || data.consents?.[0];
       body.innerHTML = `
         <div class="login-note" style="margin-top:0; border-left-color:#2e7d32;">
-          <strong>A versão vigente (v${currentVer.version_number}) já foi confirmada pelo representante.</strong><br/>
-          ${consent ? `Confirmada por <b>${escapeHtml(consent.representative_name)}</b> (${escapeHtml(consent.representative_email)}) em ${formatDateTimeBr(consent.accepted_at)} • Protocolo <b>${escapeHtml(consent.protocol_code)}</b>.` : ""}
+          <strong>Consentimento registrado.</strong><br/>
+          ${consent ? `Confirmado por <b>${escapeHtml(consent.representative_name)}</b> (${escapeHtml(consent.representative_email)}) em ${formatDateTimeBr(consent.accepted_at)} • Protocolo <b>${escapeHtml(consent.protocol_code)}</b>.` : ""}
         </div>
-        <p class="hint" style="margin-top:10px;">
-          Caso precise enviar uma ata corrigida, crie uma nova versão para preservar o PDF e o consentimento anteriores.
-        </p>
+        ${currentVer ? `<div style="margin-top:12px;"><a href="/api/meetings/${activeMeetingId}/versions/${currentVer.id}/pdf?download=1" class="btn btn-primary btn-sm" style="text-decoration:none;">Baixar PDF Confirmado</a></div>` : ""}
       `;
       $("modalPublicLink").classList.remove("hidden");
       return;
     }
 
-    const activeBlock = activeLink
-      ? `
-        <div class="section-card" style="margin-bottom:14px;">
+    if (activeLink) {
+      body.innerHTML = `
+        <div class="section-card" style="margin-bottom:0;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <strong>Link Público Ativo (Versão v${activeLink.version_number})</strong>
-            <span class="status-badge ${escapeAttr(activeMeetingMeta?.workflow_status || "link_enviado")}">${escapeHtml(activeMeetingMeta?.workflow_label || "Link enviado")}</span>
+            <strong>Link para Consentimento</strong>
+            <span class="status-badge ${escapeAttr(activeMeetingMeta?.workflow_status || "link_enviado")}">${escapeHtml(STATUS_LABELS[activeMeetingMeta?.workflow_status] || "Link enviado")}</span>
           </div>
           <div class="copy-link-row">
             <input type="text" id="inpActivePublicUrl" value="${escapeAttr(activeLink.public_url || "")}" readonly />
-            <button type="button" id="btnCopyPublicUrl" class="btn btn-primary btn-sm">Copiar Link</button>
-            <a href="${escapeAttr(activeLink.public_url || "#")}" target="_blank" rel="noopener" class="btn btn-outline btn-sm" style="text-decoration:none;">Abrir Página</a>
+            <button type="button" id="btnCopyPublicUrl" class="btn btn-primary btn-sm">Copiar</button>
+            <a href="${escapeAttr(activeLink.public_url || "#")}" target="_blank" rel="noopener" class="btn btn-outline btn-sm" style="text-decoration:none;">Abrir</a>
           </div>
           <p class="hint" style="margin-top:8px;">
-            Válido até: <b>${formatDateTimeBr(activeLink.expires_at)}</b> • Acessos registrados: <b>${activeLink.view_count}</b>
+            Válido até ${formatDateTimeBr(activeLink.expires_at)} • Acessos: <b>${activeLink.view_count}</b>
           </p>
-          <div style="margin-top:10px; display:flex; gap:8px;">
-            <button type="button" id="btnRevokePublicLink" class="btn btn-danger-ghost">Invalidar Link Atual</button>
+          <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+            ${currentVer ? `<a href="/api/meetings/${activeMeetingId}/versions/${currentVer.id}/pdf" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;">Ver PDF</a>` : ""}
+            <button type="button" id="btnRenewPublicLink" class="btn btn-outline btn-sm">Gerar Novo Link</button>
           </div>
         </div>
-      `
-      : `<p class="hint" style="margin-bottom:12px;">Nenhum link público ativo no momento para a versão vigente <b>v${currentVer.version_number}</b>.</p>`;
+      `;
 
-    body.innerHTML = `
-      ${activeBlock}
-      <div class="panel-section" style="margin-bottom:0; padding-bottom:0; border-bottom:none;">
-        <h4 style="margin:0 0 8px; font-size:13px; color:var(--locar-green-dark);">${activeLink ? "Gerar Novo Link (Invalida o link anterior)" : "Gerar Novo Link Exclusivo e Seguro"}</h4>
-        <p class="hint" style="margin-bottom:10px;">
-          Vinculado à cidade <b>${escapeHtml(activeCityObj?.name || "")}</b>, reunião <b>${escapeHtml(state.title)}</b> e PDF exato <b>v${currentVer.version_number}</b> (SHA-256: <span class="mono-hash">${currentVer.pdf_sha256.slice(0, 16)}...</span>).
-        </p>
-        <div class="field-row">
-          <div class="field">
-            <label for="inpLinkDays">Validade do link (dias)</label>
-            <input type="number" id="inpLinkDays" min="1" max="180" value="30" />
-          </div>
-          <div class="field" style="display:flex; align-items:flex-end;">
-            <button type="button" id="btnCreateNewPublicLink" class="btn btn-primary" style="width:100%;">
-              ${activeLink ? "Substituir e Gerar Novo Link" : "Gerar Link Seguro Agora"}
-            </button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    const copyBtn = $("btnCopyPublicUrl");
-    if (copyBtn) {
-      copyBtn.addEventListener("click", async () => {
+      $("btnCopyPublicUrl").addEventListener("click", async () => {
         await window.LocarApi.copyToClipboard($("inpActivePublicUrl").value);
-        showToast("Link público copiado para a área de transferência!");
+        showToast("Link copiado!");
       });
-    }
 
-    const revokeBtn = $("btnRevokePublicLink");
-    if (revokeBtn) {
-      revokeBtn.addEventListener("click", async () => {
-        const reason = window.prompt("Motivo da invalidação do link (opcional):", "Invalidado pelo administrador LOCAR") || "Invalidado pelo administrador LOCAR";
-        await window.LocarApi.post(`/api/public-links/${activeLink.id}/revoke`, { reason });
-        showToast("Link público invalidado!");
+      $("btnRenewPublicLink").addEventListener("click", async () => {
+        const res = await window.LocarApi.post(`/api/meetings/${activeMeetingId}/public-link`, { expires_in_days: 30 });
+        await window.LocarApi.copyToClipboard(res.public_url).catch(() => {});
+        showToast("Novo link gerado e copiado!");
+        await loadMeetingIntoEditor(activeMeetingId);
+        await openPublicLinkModal();
+      });
+    } else {
+      body.innerHTML = `
+        <p class="hint" style="margin-bottom:12px;">Nenhum link ativo no momento.</p>
+        <button type="button" id="btnCreateLinkNow" class="btn btn-primary btn-sm">Gerar Link Agora</button>
+      `;
+      $("btnCreateLinkNow").addEventListener("click", async () => {
+        await window.LocarApi.post(`/api/meetings/${activeMeetingId}/public-link`, { expires_in_days: 30 });
         await loadMeetingIntoEditor(activeMeetingId);
         await openPublicLinkModal();
       });
     }
 
-    $("btnCreateNewPublicLink").addEventListener("click", async () => {
-      const days = parseInt($("inpLinkDays").value || "30", 10);
-      const res = await window.LocarApi.post(`/api/meetings/${activeMeetingId}/public-link`, { expires_in_days: days });
-      await window.LocarApi.copyToClipboard(res.public_url).catch(() => {});
-      showToast("Link público gerado e copiado!");
-      await loadMeetingIntoEditor(activeMeetingId);
-      await openPublicLinkModal();
-    });
-
     $("modalPublicLink").classList.remove("hidden");
   }
 
-  async function openVersionsAuditModal() {
-    if (!activeMeetingId) return;
-    const data = await window.LocarApi.get(`/api/meetings/${activeMeetingId}/versions`);
-    const versions = data.versions || [];
-    const consents = data.consents || [];
-    const logs = data.audit_logs || [];
-
-    const versionsHtml = versions.length
-      ? versions
-          .map(
-            (v) => `
-          <tr>
-            <td><strong>v${v.version_number}</strong> ${v.is_current ? '<span class="status-badge confirmada">Vigente</span>' : '<span class="status-badge rascunho">Histórica</span>'}</td>
-            <td>${escapeHtml(v.change_reason)}<br/><span class="mono-hash">${v.pdf_sha256}</span></td>
-            <td>${formatBytes(v.pdf_size_bytes)}</td>
-            <td>${escapeHtml(v.generated_by_name)}<br/><span class="hint">${formatDateTimeBr(v.generated_at)}</span></td>
-            <td>
-              <a href="/api/meetings/${activeMeetingId}/versions/${v.id}/pdf" target="_blank" class="btn btn-outline btn-sm" style="text-decoration:none;">Visualizar</a>
-              <a href="/api/meetings/${activeMeetingId}/versions/${v.id}/pdf?download=1" class="btn btn-secondary btn-sm" style="text-decoration:none;">Baixar</a>
-            </td>
-          </tr>
-        `
-          )
-          .join("")
-      : `<tr><td colspan="5" class="hint">Nenhuma versão definitiva em PDF foi gerada para esta reunião ainda.</td></tr>`;
-
-    const consentsHtml = consents.length
-      ? consents
-          .map(
-            (c) => `
-          <tr>
-            <td><strong>${escapeHtml(c.protocol_code)}</strong><br/><span class="hint">v${c.version_number}</span></td>
-            <td><strong>${escapeHtml(c.representative_name)}</strong><br/>${escapeHtml(c.representative_email)}${c.representative_role ? "<br/><span class='hint'>" + escapeHtml(c.representative_role) + "</span>" : ""}</td>
-            <td>${formatDateTimeBr(c.accepted_at)}<br/><span class="hint">IP: ${escapeHtml(c.client_ip || "—")}</span></td>
-            <td>
-              PDF lido: ${c.pdf_viewed_before_consent ? "Sim" : "Não"} | Baixado: ${c.pdf_downloaded_before_consent ? "Sim" : "Não"}<br/>
-              <span class="mono-hash">PDF: ${c.pdf_sha256.slice(0, 18)}...</span><br/>
-              <span class="mono-hash">Integridade: ${c.integrity_hash.slice(0, 18)}...</span>
-            </td>
-          </tr>
-        `
-          )
-          .join("")
-      : `<tr><td colspan="4" class="hint">Nenhum registro de consentimento confirmado até o momento.</td></tr>`;
-
-    const logsHtml = logs
-      .slice(0, 25)
-      .map(
-        (l) => `
-        <tr>
-          <td>${formatDateTimeBr(l.created_at)}</td>
-          <td><strong>${escapeHtml(l.event_type)}</strong></td>
-          <td>${escapeHtml(l.actor_identifier)} (${escapeHtml(l.actor_type)})</td>
-          <td>${escapeHtml(l.ip_address || "—")}</td>
-        </tr>
-      `
-      )
-      .join("");
-
-    $("versionsAuditBody").innerHTML = `
-      <div class="section-card">
-        <h3>Versões Congeladas em PDF</h3>
-        <div class="data-table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Versão</th><th>Motivo &amp; SHA-256</th><th>Tamanho</th><th>Geração</th><th>PDF</th></tr></thead>
-            <tbody>${versionsHtml}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="section-card">
-        <h3>Registros Auditáveis de Consentimento</h3>
-        <p class="hint" style="margin-bottom:8px;">
-          Registro eletrônico auditável de ciência e concordância vinculado ao arquivo PDF exato (SHA-256). Não equivale automaticamente a assinatura digital qualificada ICP-Brasil.
-        </p>
-        <div class="data-table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Protocolo</th><th>Representante</th><th>Data / IP</th><th>Evidências Técnicas</th></tr></thead>
-            <tbody>${consentsHtml}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="section-card" style="margin-bottom:0;">
-        <h3>Trilha Recente de Auditoria</h3>
-        <div class="data-table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Data / Hora</th><th>Evento</th><th>Ator</th><th>IP</th></tr></thead>
-            <tbody>${logsHtml}</tbody>
-          </table>
-        </div>
-      </div>
-    `;
-
-    $("modalVersionsAudit").classList.remove("hidden");
-  }
-
+  // -------------------- Usuários Admin --------------------
   async function openAdminUsersModal() {
     const data = await window.LocarApi.get("/api/admin/users");
     const users = data.users || [];
@@ -1640,7 +1613,7 @@
         <td>${escapeHtml(u.email)}</td>
         <td>${u.is_active ? '<span class="status-badge confirmada">Ativo</span>' : '<span class="status-badge link_invalido">Inativo</span>'}</td>
         <td>
-          ${u.id !== currentAdmin?.id ? `<button type="button" class="btn btn-outline btn-sm js-toggle-admin" data-id="${u.id}" data-active="${u.is_active}">${u.is_active ? "Desativar" : "Ativar"}</button>` : "<span class='hint'>Sessão atual</span>"}
+          ${u.id !== currentAdmin?.id ? `<button type="button" class="btn btn-outline btn-sm js-toggle-admin" data-id="${u.id}" data-active="${u.is_active}">${u.is_active ? "Desativar" : "Ativar"}</button>` : "<span class='hint'>Atual</span>"}
         </td>
       </tr>
     `
@@ -1656,15 +1629,15 @@
             <input type="password" id="inpCurPw" required />
           </div>
           <div class="field" style="margin-bottom:0;">
-            <label for="inpNewPw">Nova senha (mín. 8 caracteres)</label>
+            <label for="inpNewPw">Nova senha (mín. 8)</label>
             <input type="password" id="inpNewPw" minlength="8" required />
           </div>
-          <button type="submit" class="btn btn-secondary btn-sm" style="height:36px;">Alterar Senha</button>
+          <button type="submit" class="btn btn-secondary btn-sm" style="height:36px;">Alterar</button>
         </form>
       </div>
 
       <div class="section-card">
-        <h3>Cadastrar Novo Administrador LOCAR</h3>
+        <h3>Novo Usuário</h3>
         <form id="formNewAdminUser" style="display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:10px; align-items:end;">
           <div class="field" style="margin-bottom:0;">
             <label for="inpNewAdminName">Nome</label>
@@ -1675,7 +1648,7 @@
             <input type="text" id="inpNewAdminEmail" required />
           </div>
           <div class="field" style="margin-bottom:0;">
-            <label for="inpNewAdminPw">Senha inicial</label>
+            <label for="inpNewAdminPw">Senha</label>
             <input type="password" id="inpNewAdminPw" minlength="8" required />
           </div>
           <button type="submit" class="btn btn-primary btn-sm" style="height:36px;">Adicionar</button>
@@ -1683,7 +1656,7 @@
       </div>
 
       <div class="section-card" style="margin-bottom:0;">
-        <h3>Administradores Cadastrados</h3>
+        <h3>Usuários</h3>
         <div class="data-table-wrap">
           <table class="data-table">
             <thead><tr><th>Nome</th><th>E-mail</th><th>Status</th><th>Ação</th></tr></thead>
@@ -1700,7 +1673,7 @@
           current_password: $("inpCurPw").value,
           new_password: $("inpNewPw").value
         });
-        showToast("Senha alterada com sucesso!");
+        showToast("Senha alterada!");
         $("formChangeOwnPassword").reset();
       } catch (err) {
         showToast(err.message);
@@ -1715,7 +1688,7 @@
           email: $("inpNewAdminEmail").value,
           password: $("inpNewAdminPw").value
         });
-        showToast("Administrador cadastrado!");
+        showToast("Usuário cadastrado!");
         await openAdminUsersModal();
       } catch (err) {
         showToast(err.message);
@@ -1811,13 +1784,6 @@
       markDirtyAndScheduleSave();
     });
 
-    $("chkShowKpis").addEventListener("change", (e) => {
-      if (isMeetingLocked()) return;
-      state.showKpisOnSheet = e.target.checked;
-      renderSheet();
-      markDirtyAndScheduleSave();
-    });
-
     $("selHeaderTheme").addEventListener("change", (e) => {
       if (isMeetingLocked()) return;
       state.headerTheme = e.target.value;
@@ -1838,6 +1804,61 @@
       renderSheet();
       markDirtyAndScheduleSave();
     });
+
+    // Cores personalizadas
+    $("inpPrimaryColor").addEventListener("input", (e) => {
+      if (isMeetingLocked()) return;
+      const hex = normalizeHex(e.target.value, "#0a7e3a");
+      state.primaryColor = hex;
+      $("inpPrimaryColorHex").value = hex;
+      renderColorPalettes();
+      renderSheet();
+      markDirtyAndScheduleSave();
+    });
+
+    $("inpPrimaryColorHex").addEventListener("change", (e) => {
+      if (isMeetingLocked()) return;
+      const hex = normalizeHex(e.target.value, state.primaryColor || "#0a7e3a");
+      state.primaryColor = hex;
+      $("inpPrimaryColor").value = hex;
+      $("inpPrimaryColorHex").value = hex;
+      renderColorPalettes();
+      renderSheet();
+      markDirtyAndScheduleSave();
+    });
+
+    $("inpSecondaryColor").addEventListener("input", (e) => {
+      if (isMeetingLocked()) return;
+      const hex = normalizeHex(e.target.value, "#b4c85a");
+      state.secondaryColor = hex;
+      $("inpSecondaryColorHex").value = hex;
+      renderColorPalettes();
+      renderSheet();
+      markDirtyAndScheduleSave();
+    });
+
+    $("inpSecondaryColorHex").addEventListener("change", (e) => {
+      if (isMeetingLocked()) return;
+      const hex = normalizeHex(e.target.value, state.secondaryColor || "#b4c85a");
+      state.secondaryColor = hex;
+      $("inpSecondaryColor").value = hex;
+      $("inpSecondaryColorHex").value = hex;
+      renderColorPalettes();
+      renderSheet();
+      markDirtyAndScheduleSave();
+    });
+
+    $("btnAddPaletteColor").addEventListener("click", () => {
+      const pHex = normalizeHex(state.primaryColor, "#0a7e3a");
+      const sHex = normalizeHex(state.secondaryColor, "#b4c85a");
+      const name = (window.prompt("Nome desta combinação de cores:", "Minha Cor") || "").trim();
+      if (!name) return;
+      const custom = loadCustomPalettes();
+      custom.push({ name: name.slice(0, 24), primary: pHex, secondary: sHex });
+      saveCustomPalettes(custom);
+      renderColorPalettes();
+      showToast("Cor adicionada à paleta!");
+    });
   }
 
   function openNewMeetingModal() {
@@ -1857,8 +1878,18 @@
     $("modalNewMeeting").classList.remove("hidden");
   }
 
+  function readImageFileAsDataUrl(file, callback) {
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      showToast("Imagem deve ter no máximo 2 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => callback(reader.result);
+    reader.readAsDataURL(file);
+  }
+
   function initButtons() {
-    // Login & Logout
     $("loginForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       $("loginError").classList.add("hidden");
@@ -1873,7 +1904,7 @@
         );
         await enterAuthenticatedApp(res.user);
       } catch (err) {
-        $("loginError").textContent = err.message || "Falha na autenticação.";
+        $("loginError").textContent = err.message || "Falha no login.";
         $("loginError").classList.remove("hidden");
       }
     });
@@ -1884,28 +1915,28 @@
     });
 
     window.addEventListener("locar:unauthorized", () => {
-      showLoginScreen("Sessão encerrada ou expirada. Faça login novamente.");
+      showLoginScreen("Sessão expirada. Entre novamente.");
     });
 
-    // Navegação global
+    $("topbarHomeBtn").addEventListener("click", () => switchView("dashboard"));
+
     document.querySelectorAll(".nav-pill").forEach((btn) => {
       btn.addEventListener("click", () => switchView(btn.dataset.view));
     });
 
     $("globalCitySelect").addEventListener("change", (e) => handleGlobalCityChange(e.target.value));
 
-    // Dashboard e Histórico
+    // Visão 1: Cidades
     $("dashSearchInput").addEventListener("input", renderDashboardView);
     $("dashStatusFilter").addEventListener("change", renderDashboardView);
-    $("btnDashRefresh").addEventListener("click", refreshCitiesAndDashboard);
     $("btnDashNewCity").addEventListener("click", () => openCityModal(null));
-    $("btnNewCity").addEventListener("click", () => openCityModal(null));
-    $("btnNewMeetingFromHistory").addEventListener("click", openNewMeetingModal);
-    $("btnEditCityFromHistory").addEventListener("click", () => {
-      if (activeCityObj) openCityModal(activeCityObj);
-    });
 
-    // Editor
+    // Visão 2: Histórico / Reuniões
+    $("btnNewMeetingFromHistory").addEventListener("click", openNewMeetingModal);
+    $("historyActionFilter").addEventListener("change", renderCityActionTrackerTable);
+
+    // Visão 3: Editor
+    $("btnBackToHistory").addEventListener("click", () => switchView("city-history"));
     $("selCityMeeting").addEventListener("change", async (e) => {
       if (!e.target.value) return;
       if (dirtyFlag && activeMeetingId && !isMeetingLocked()) {
@@ -1915,6 +1946,8 @@
     });
 
     $("btnNewMeeting").addEventListener("click", openNewMeetingModal);
+    $("btnNextMeetingFromBar").addEventListener("click", openNewMeetingModal);
+    $("btnNextMeetingFromLocked").addEventListener("click", openNewMeetingModal);
 
     $("formNewMeeting").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -1930,7 +1963,12 @@
         $("modalNewMeeting").classList.add("hidden");
         activeMeetingId = res.meeting.id;
         await switchView("editor");
-        showToast("Nova reunião criada para a cidade selecionada!");
+        const importedCount = res.meeting?.snapshot?.actions?.length || 0;
+        showToast(
+          importedCount > 0
+            ? `Nova reunião criada com ${importedCount} pendência(s) da anterior.`
+            : "Nova reunião criada!"
+        );
       } catch (err) {
         showToast("Erro ao criar reunião: " + err.message);
       }
@@ -1943,69 +1981,17 @@
         state = res.meeting.snapshot;
         renderEditorInputs();
         renderSheet();
-        showToast(`${res.imported_count} ação(ões) pendente(s) importada(s) com Status vazio p/ papel!`);
+        showToast(`${res.imported_count} pendência(s) importada(s)!`);
       } catch (err) {
-        showToast("Erro ao importar pendências: " + err.message);
+        showToast("Erro ao puxar pendências: " + err.message);
       }
-    });
-
-    // Presets originais preservados
-    $("selPreset").addEventListener("change", (e) => {
-      const val = e.target.value;
-      if (!val) return;
-      if (isMeetingLocked()) {
-        showToast("Ata confirmada está travada. Crie uma nova versão para aplicar outro modelo.");
-        e.target.value = "";
-        return;
-      }
-      const preset = clonePreset(val);
-      state = {
-        ...preset,
-        id: state.id,
-        cityId: state.cityId
-      };
-      renderEditorInputs();
-      renderSheet();
-      markDirtyAndScheduleSave();
-      showToast(`Modelo aplicado ao rascunho: ${preset.label}`);
-      e.target.value = "";
     });
 
     $("btnPrintPdf").addEventListener("click", () => window.print());
     $("btnExportWord").addEventListener("click", exportToWord);
-    $("btnExportJson").addEventListener("click", exportJSON);
-
-    $("btnImportJson").addEventListener("click", () => {
-      if (isMeetingLocked()) {
-        showToast("Ata confirmada está travada. Crie uma nova versão ou nova reunião para importar JSON.");
-        return;
-      }
-      $("inpImportJson").click();
-    });
-    $("inpImportJson").addEventListener("change", async (e) => {
-      const f = e.target.files?.[0];
-      if (!f) return;
-      try {
-        const parsed = JSON.parse(await f.text());
-        state = {
-          ...parsed,
-          id: state.id,
-          cityId: state.cityId
-        };
-        renderEditorInputs();
-        renderSheet();
-        markDirtyAndScheduleSave();
-        showToast("Ata JSON importada para o rascunho!");
-      } catch {
-        showToast("Arquivo JSON inválido.");
-      }
-      e.target.value = "";
-    });
-
     $("btnSaveMeeting").addEventListener("click", () => saveActiveMeeting({ silent: false }));
-    $("btnFinalizePdf").addEventListener("click", finalizeMeetingPdf);
-    $("btnGeneratePublicLink").addEventListener("click", openPublicLinkModal);
-    $("btnOpenVersionsModal").addEventListener("click", openVersionsAuditModal);
+    $("btnGeneratePublicLink").addEventListener("click", sendPublicLinkFromCurrentState);
+    $("btnViewSentLink").addEventListener("click", openPublicLinkModal);
 
     $("btnDownloadConfirmedPdf").addEventListener("click", () => {
       const cur = activeVersions.find((v) => v.is_current) || activeVersions[0];
@@ -2013,33 +1999,15 @@
       window.open(`/api/meetings/${activeMeetingId}/versions/${cur.id}/pdf?download=1`, "_blank");
     });
 
-    $("btnUnlockNewVersion").addEventListener("click", async () => {
-      if (!activeMeetingId) return;
-      const reason = window.prompt(
-        "Informe o motivo da criação de nova versão (o PDF e consentimento anteriores serão preservados):",
-        "Correção documental"
-      );
-      if (reason === null) return;
-      const res = await window.LocarApi.post(`/api/meetings/${activeMeetingId}/unlock-new-version`, {
-        change_reason: reason
-      });
-      activeMeetingMeta = res.meeting;
-      activeVersions = res.versions || [];
-      activeLink = res.active_link || null;
-      activeConsents = res.consents || [];
-      applyEditorStateToUi();
-      showToast("Nova versão habilitada! Edite e clique em 'Finalizar Ata (PDF)' para congelar a revisão.");
-    });
-
     $("btnAnalyzeTranscript").addEventListener("click", () => processTranscriptText());
 
     $("btnAddAction").addEventListener("click", () => {
-      if (isMeetingLocked()) return;
-      const nextMonth = state.actions?.[0]?.deadline || "Próx. Reunião";
+      if (isMeetingLocked() || !activeMeetingId) return;
+      const defaultDeadline = state.actions?.[0]?.deadline || "Próx. Reunião";
       state.actions.push({
         action: "",
         owner: "",
-        deadline: nextMonth,
+        deadline: defaultDeadline,
         status: ""
       });
       renderActionsEditor();
@@ -2048,17 +2016,18 @@
     });
 
     $("btnClearStatuses").addEventListener("click", () => {
-      if (isMeetingLocked()) return;
+      if (isMeetingLocked() || !activeMeetingId) return;
       state.actions.forEach((a) => (a.status = ""));
+      renderActionsEditor();
       renderSheet();
       markDirtyAndScheduleSave();
-      showToast("Coluna Status esvaziada para preenchimento no papel.");
+      showToast("Status da folha limpo.");
     });
 
     $("btnAddTopic").addEventListener("click", () => {
-      if (isMeetingLocked()) return;
+      if (isMeetingLocked() || !activeMeetingId) return;
       state.topics = state.topics || [];
-      state.topics.push({ area: "Novo Tópico", text: "" });
+      state.topics.push({ area: "Tema", text: "" });
       state.showTopics = true;
       $("chkShowTopics").checked = true;
       renderTopicsEditor();
@@ -2066,37 +2035,74 @@
       markDirtyAndScheduleSave();
     });
 
-    $("btnAddKpi").addEventListener("click", () => {
-      if (isMeetingLocked()) return;
-      const label = prompt("Nome do indicador (ex: Quadro, Horas Extras, CPK):");
-      if (!label) return;
-      const value = prompt("Valor / Destaque (ex: 648 colab., R$ 406,8 mil):");
-      if (!value) return;
-      state.indicators = state.indicators || [];
-      state.indicators.push({ label, value, status: "ok" });
-      renderKpiEditor();
+    // Logo do Relatório (aba 4 e clique direto na folha A4)
+    $("btnChangeReportLogo").addEventListener("click", () => {
+      if (!isMeetingLocked() && activeMeetingId) $("inpReportLogoFile").click();
+    });
+    $("sheetLogoImg").addEventListener("click", () => {
+      if (!isMeetingLocked() && activeMeetingId) $("inpReportLogoFile").click();
+    });
+    $("inpReportLogoFile").addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      readImageFileAsDataUrl(file, async (dataUrl) => {
+        state.reportLogoDataUrl = dataUrl;
+        renderLogoPreviews();
+        renderSheet();
+        await saveActiveMeeting({ silent: true });
+        showToast("Logo do relatório alterada!");
+      });
+      e.target.value = "";
+    });
+    $("btnResetReportLogo").addEventListener("click", async () => {
+      if (isMeetingLocked() || !activeMeetingId) return;
+      state.reportLogoDataUrl = "";
+      renderLogoPreviews();
       renderSheet();
-      markDirtyAndScheduleSave();
+      await saveActiveMeeting({ silent: true });
+      showToast("Logo padrão restaurada.");
     });
 
+    // Logo da Cidade (aba 4)
+    $("btnChangeEditorCityLogo").addEventListener("click", () => {
+      if (!isMeetingLocked() && activeMeetingId) $("inpEditorCityLogoFile").click();
+    });
+    $("inpEditorCityLogoFile").addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      readImageFileAsDataUrl(file, async (dataUrl) => {
+        state.cityLogoDataUrl = dataUrl;
+        if (activeCityObj) activeCityObj.logo_data_url = dataUrl;
+        renderLogoPreviews();
+        renderSheet();
+        await saveActiveMeeting({ silent: true });
+        showToast("Logo da cidade alterada!");
+      });
+      e.target.value = "";
+    });
+    $("btnRemoveEditorCityLogo").addEventListener("click", async () => {
+      if (isMeetingLocked() || !activeMeetingId) return;
+      state.cityLogoDataUrl = "";
+      if (activeCityObj) activeCityObj.logo_data_url = "";
+      renderLogoPreviews();
+      renderSheet();
+      await saveActiveMeeting({ silent: true });
+      showToast("Logo da cidade removida.");
+    });
+
+    // Zoom
     $("btnZoomOut").addEventListener("click", () => applyZoom(currentZoom - 0.1));
     $("btnZoomIn").addEventListener("click", () => applyZoom(currentZoom + 0.1));
     $("btnZoomFit").addEventListener("click", () => {
       const areaWidth = $("previewScroll").clientWidth - 48;
-      const sheetPx = 794;
-      applyZoom(Math.min(1, areaWidth / sheetPx));
+      applyZoom(Math.min(1, areaWidth / 794));
     });
 
-    // Modal Cidade / Projeto
+    // Modal Cidade
     $("cityLogoInput").addEventListener("change", (e) => {
       const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        pendingCityLogoDataUrl = reader.result;
-        updateCityLogoPreview(pendingCityLogoDataUrl);
-      };
-      reader.readAsDataURL(file);
+      readImageFileAsDataUrl(file, (dataUrl) => {
+        pendingCityLogoDataUrl = dataUrl;
+        updateCityLogoPreview(dataUrl);
+      });
     });
 
     $("btnRemoveCityLogo").addEventListener("click", () => {
@@ -2116,7 +2122,6 @@
         display_order: parseInt($("cityOrderInput").value || "1", 10),
         default_local: $("cityLocalInput").value.trim(),
         default_footer: $("cityFooterInput").value.trim(),
-        institutional_info: $("cityInfoInput").value.trim(),
         is_active: $("cityActiveInput").checked
       };
       if (pendingCityLogoDataUrl === "") {
@@ -2128,23 +2133,21 @@
       try {
         if (cityId) {
           await window.LocarApi.put(`/api/cities/${cityId}`, payload);
-          showToast("Cidade/projeto atualizado preservando todo o histórico!");
+          showToast("Cidade atualizada!");
         } else {
           const created = await window.LocarApi.post("/api/cities", payload);
           selectedCityId = created.city.id;
-          showToast("Nova cidade/projeto cadastrada!");
+          showToast("Cidade cadastrada!");
         }
         $("modalCityForm").classList.add("hidden");
         await refreshCitiesAndDashboard();
       } catch (err) {
-        showToast("Erro ao salvar cidade/projeto: " + err.message);
+        showToast("Erro ao salvar cidade: " + err.message);
       }
     });
 
-    // Modal Administradores
     $("btnOpenAdminModal").addEventListener("click", openAdminUsersModal);
 
-    // Fechar modais
     document.querySelectorAll(".modal-close").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.dataset.close;
@@ -2160,25 +2163,12 @@
       if ($("loginLogoImg")) $("loginLogoImg").src = window.LOCAR_LOGOS.color;
     }
 
-    const sel = $("selPreset");
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = "Aplicar modelo de referência...";
-    sel.appendChild(placeholder);
-    Object.values(window.LOCAR_PRESETS).forEach((p) => {
-      const opt = document.createElement("option");
-      opt.value = p.id;
-      opt.textContent = p.label;
-      sel.appendChild(opt);
-    });
-
     initTabs();
     bindDirectInputs();
     initButtons();
 
     setupDropzone("dropAttendance", "fileAttendance", handleAttendanceUpload);
     setupDropzone("dropTranscript", "fileTranscript", handleTranscriptUpload);
-    setupDropzone("dropIndicators", "fileIndicators", handleIndicatorsUpload);
 
     try {
       const auth = await window.LocarApi.get("/api/auth/me", { skipAuthEvent: true });
@@ -2187,7 +2177,7 @@
         return;
       }
     } catch {
-      // Não autenticado: permanece na tela de login
+      // Não autenticado
     }
     showLoginScreen();
   });

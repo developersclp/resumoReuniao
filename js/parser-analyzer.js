@@ -351,9 +351,19 @@
     let nextMonthYear = currentContext.nextMonthYear || "";
 
     if (lines.length > 0) {
-      const headMatch = lines[0].match(/Indicadores\s+([A-Za-zÀ-ÿ\s]+?)(?:-\d{8}|$)/i);
+      const headMatch = lines[0].match(/(?:Indicadores|Reuni[aã]o(?:\s+de\s+Indicadores)?)\s+([A-Za-zÀ-ÿ\s]+?)(?:\s+\d{1,2}\/\d{1,2}|\s*[-–]\s*\d{4,8}|$)/i);
       if (headMatch && !detectedUnit) {
         detectedUnit = headMatch[1].trim();
+      }
+      const headDateMatch = lines[0].match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
+      if (headDateMatch) {
+        const dt = parseTeamsDateTime(`${headDateMatch[1]} 09:00`);
+        if (dt) {
+          if (!detectedDate) detectedDate = formatDateWithWeekday(dt);
+          const months = inferMonthsFromMeetingDate(dt);
+          if (!refMonthYear) refMonthYear = months.refMonthYear;
+          if (!nextMonthYear) nextMonthYear = months.nextMonthYear;
+        }
       }
     }
 
@@ -375,18 +385,48 @@
       nextMonthYear = nextMonthYear || fallback.nextMonthYear;
     }
 
-    // Extrai participantes citados na transcrição se não vieram do CSV
+    // Extrai blocos de fala { speaker, text } e lista de participantes citados na transcrição
     const speakerSet = new Set();
-    const speakerRegex = /^([A-ZÀ-Ý][a-zà-ÿ]+(?:\s+(?:de|da|do|dos|das|e)?\s*[A-ZÀ-Ý][a-zà-ÿ]+){0,3})\s+\d{1,2}:\d{2}(?::\d{2})?/;
+    const speechBlocks = [];
+    const speakerRegex = /^([A-ZÀ-Ý][a-zà-ÿ]+(?:\s+(?:de|da|do|dos|das|e|&)?\s*[A-ZÀ-Ý][a-zà-ÿ]+){0,5})\s+\d{1,2}:\d{2}(?::\d{2})?\s*$/;
+    const colonSpeakerRegex = /^([A-ZÀ-Ý][a-zà-ÿ]+(?:\s+(?:de|da|do|dos|das|e)?\s*[A-ZÀ-Ý][a-zà-ÿ]+){0,3}):\s+(.+)$/;
+
+    let currentBlock = null;
     lines.forEach((line) => {
+      if (/^(?:Indicadores|Reuni[aã]o\s+[A-ZÀ-Ý]|Dura[çc][aã]o:|Transcri)/i.test(line) || parseTeamsDateTime(line)) {
+        return;
+      }
       const sm = line.match(speakerRegex);
       if (sm) {
         const sp = cleanParticipantName(sm[1]);
         if (sp && sp.length > 2 && !/^(Indicadores|Microsoft|Transcri)/i.test(sp)) {
-          speakerSet.add(sp);
+          sp.split(/\s*&\s*/).forEach((part) => {
+            const p = cleanParticipantName(part);
+            if (p) speakerSet.add(p);
+          });
+          currentBlock = { speaker: sp, lines: [] };
+          speechBlocks.push(currentBlock);
         }
+        return;
       }
+      const cm = line.match(colonSpeakerRegex);
+      if (cm && cm[1].length <= 40 && !/^(Plano de a[çc][aã]o|Encaminhamento|Observa[çc][aã]o|Prazo|Status|Resumo|Objetivo)/i.test(cm[1])) {
+        const sp = cleanParticipantName(cm[1]);
+        if (sp && sp.length > 2) speakerSet.add(sp);
+        currentBlock = { speaker: sp, lines: [cm[2].trim()] };
+        speechBlocks.push(currentBlock);
+        return;
+      }
+      if (!currentBlock) {
+        currentBlock = { speaker: "", lines: [] };
+        speechBlocks.push(currentBlock);
+      }
+      currentBlock.lines.push(line);
     });
+
+    const blocks = speechBlocks
+      .map((b) => ({ speaker: b.speaker, text: b.lines.join(" ").replace(/\s+/g, " ").trim() }))
+      .filter((b) => b.text.length > 0);
 
     const lower = text.toLowerCase();
     const indicators = [];
@@ -587,7 +627,7 @@
         owner: findMentionedOwners(text, ["Vitor", "Alison", "RH"], "RH e Gestão")
       },
       {
-        test: /totvs|treinamento/i,
+        test: /\btotvs\b|treinamento.*?\b(?:dtm|totvs|mec[aâ]nica)\b/i,
         action: "Realizar e revisar treinamento de rotina do DTM e lançamentos no sistema TOTVS",
         owner: findMentionedOwners(text, ["Romário", "DTM"], "DTM")
       }
@@ -604,34 +644,131 @@
       }
     });
 
-    // Captura também linhas explícitas com marcador "plano de ação:" se houver na transcrição e poucas regras baterem
-    if (actions.length === 0) {
-      const explicitMatches = text.match(/(?:plano de a[çc][aã]o|encaminhamento|ficou definido|precisamos)[:\s]+([^.!?\n]{15,160})/gi) || [];
-      explicitMatches.slice(0, 6).forEach((m) => {
-        const cleaned = m.replace(/^(?:plano de a[çc][aã]o|encaminhamento|ficou definido|precisamos)[:\s]+/i, "").trim();
+    // Extração complementar inteligente para qualquer transcrição ou pauta de reunião
+    const speakerList = Array.from(speakerSet);
+    const knownNames = Array.from(
+      new Set([
+        ...speakerList,
+        ...(currentContext.participants ? currentContext.participants.split(/[,.;]+/).map((s) => s.trim()).filter(Boolean) : [])
+      ])
+    );
+
+    function inferOwnerFromSentence(sentence, fallbackSpeaker) {
+      const mentioned = knownNames.filter((name) => {
+        const first = name.split(" ")[0];
+        return first && first.length > 2 && new RegExp(`\\b${escapeRegex(first)}\\b`, "i").test(sentence);
+      });
+      if (mentioned.length > 0) return mentioned.slice(0, 3).join(", ");
+      const inlinePerson = sentence.match(/(?:^|\bque\s+)([A-ZÀ-Ý][a-zà-ÿ]{2,}(?:\s+[A-ZÀ-Ý][a-zà-ÿ]{2,})?)\s+(?:vai|deve|ir[aá]|ficou\s+respons[aá]vel)\b/);
+      if (inlinePerson) return inlinePerson[1].trim();
+      const deptMatch = sentence.match(/\b(RH|DTM|Frota|Jur[ií]dico|Financeiro|Compras|Seguran[çc]a|Tr[aá]fego|Ouvidoria|Controladoria)\b/i);
+      if (deptMatch) return deptMatch[1];
+      return fallbackSpeaker || "Equipe do Contrato";
+    }
+
+    function inferDeadlineFromSentence(sentence) {
+      const m = sentence.match(/\b(at[eé]\s+(?:sexta|segunda|ter[çc]a|quarta|quinta|s[aá]bado|dia\s+\d{1,2}(?:\/\d{1,2})?|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|amanh[aã]|pr[oó]xima\s+(?:semana|reuni[aã]o)))\b/i);
+      if (m) return m[1].charAt(0).toUpperCase() + m[1].slice(1);
+      return prazoPadrao;
+    }
+
+    function isSimilarAction(candidateText) {
+      const norm = (s) =>
+        s
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9\s]/g, " ")
+          .split(/\s+/)
+          .filter((w) => w.length > 3);
+      const candWords = new Set(norm(candidateText));
+      if (candWords.size === 0) return true;
+      return actions.some((existing) => {
+        const exWords = norm(existing.action);
+        const overlap = exWords.filter((w) => candWords.has(w)).length;
+        return overlap >= Math.min(3, Math.ceil(candWords.size * 0.55));
+      });
+    }
+
+    const actionTriggerRe =
+      /(?:plano de a[çc][aã]o|encaminhamento|ficou\s+(?:definido|acordado|combinado)|combinado|precisamos|precisa\s+de|vai\s+(?:verificar|enviar|conversar|falar|levantar|providenciar|agendar|acompanhar|definir|revisar|cobrar|solicitar|atualizar|implantar)|solicitar|providenciar|regularizar|implantar|levantar|revisar|auditar|agendar|emitir|enviar\s+(?:para|o|os|as|relat[oó]rio|of[ií]cio|planilha)|definir\s+meta|melhorar\s+a?\s*sele[çc][aã]o)/i;
+
+    const allSentences = [];
+    blocks.forEach((b) => {
+      b.text
+        .split(/(?<=[.!?])\s+|\n+/)
+        .map((s) => s.trim())
+        .filter((s) => s.length >= 12)
+        .forEach((s) => allSentences.push({ speaker: b.speaker, sentence: s }));
+    });
+
+    // Também captura linhas explícitas com bullets ou números no texto original
+    lines.forEach((line) => {
+      if (/^(?:[-*•]|\d+[.)])\s+/.test(line)) {
+        const cleaned = line.replace(/^(?:[-*•]|\d+[.)])\s+/, "").trim();
+        if (cleaned.length >= 12) {
+          allSentences.push({ speaker: "", sentence: cleaned });
+        }
+      }
+    });
+
+    allSentences.forEach(({ speaker, sentence }) => {
+      if (actions.length >= 12) return;
+      if (!actionTriggerRe.test(sentence)) return;
+
+      let cleaned = sentence
+        .replace(/^(?:plano de a[çc][aã]o|encaminhamento|ficou\s+(?:definido|acordado|combinado)(?:\s+que)?|combinado(?:\s+que)?)[:\s,-]+/i, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (cleaned.length < 14 || cleaned.length > 210) {
+        if (cleaned.length > 210) cleaned = cleaned.slice(0, 200).replace(/\s+\S*$/, "") + "...";
+        else return;
+      }
+      if (!isSimilarAction(cleaned)) {
         actions.push({
           action: cleaned.charAt(0).toUpperCase() + cleaned.slice(1),
-          owner: "Equipe do Contrato",
-          deadline: prazoPadrao,
+          owner: inferOwnerFromSentence(cleaned, speaker),
+          deadline: inferDeadlineFromSentence(cleaned),
           status: ""
         });
+      }
+    });
+
+    // Tópicos de apoio caso nenhuma regra fixa tenha gerado tópicos
+    if (topics.length === 0 && blocks.length > 0) {
+      const topicCandidates = allSentences
+        .filter(({ sentence }) => sentence.length >= 25 && !/^(bom dia|boa tarde|ol[aá]|tudo bem|t[aá] ouvindo)/i.test(sentence))
+        .slice(0, 4);
+      topicCandidates.forEach(({ speaker, sentence }, i) => {
+        const area = speaker ? speaker : `Ponto ${i + 1}`;
+        const shortText = sentence.length > 140 ? sentence.slice(0, 137).replace(/\s+\S*$/, "") + "..." : sentence;
+        topics.push({ area, text: shortText });
       });
     }
 
     const unitLabel = detectedUnit || "Unidade / Contrato";
     const summaryParts = [];
     summaryParts.push(
-      `A reunião de indicadores do Contrato ${unitLabel} referente ao mês de ${refMonthYear.toLowerCase()} apresentou a análise dos resultados operacionais, quadro de colaboradores, horas extras, atestados e faltas.`
+      `A reunião de indicadores do Contrato ${unitLabel} referente ao mês de ${refMonthYear.toLowerCase()} apresentou a análise dos resultados operacionais e alinhamento das ações do contrato.`
     );
     if (topics.length > 0) {
       summaryParts.push(
-        `Entre os principais tópicos abordados destacaram-se: ${topics
+        `Entre os principais pontos tratados destacaram-se: ${topics
           .map((t) => `${t.area} (${t.text})`)
           .join("; ")}.`
       );
+    } else if (blocks.length > 0) {
+      const highlights = blocks
+        .map((b) => b.text)
+        .filter((t) => t.length >= 25)
+        .slice(0, 3)
+        .join(" ");
+      if (highlights) {
+        summaryParts.push(highlights.length > 500 ? highlights.slice(0, 497).replace(/\s+\S*$/, "") + "..." : highlights);
+      }
     } else {
       summaryParts.push(
-        "Também foram discutidos planos de ação para melhoria da disponibilidade operacional, controle de custos de frota e manutenção, e acompanhamento de ocorrências e metas contratuais."
+        "Também foram definidos os encaminhamentos e responsáveis no plano de ação para acompanhamento até a próxima reunião."
       );
     }
 
@@ -642,13 +779,17 @@
       refMonthYear,
       nextMonthYear,
       title: `Ata de Reunião de Indicadores ${refMonthYear}`,
-      participantsList: Array.from(speakerSet),
-      participantsText: speakerSet.size > 0 ? `${Array.from(speakerSet).join(", ")}.` : "",
+      participantsList: speakerList,
+      participantsText: speakerList.length > 0 ? `${speakerList.join(", ")}.` : "",
       summary: summaryParts.join(" "),
       topics,
-      indicators,
+      indicators: [],
       actions
     };
+  }
+
+  function escapeRegex(str) {
+    return String(str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
   function findMentionedOwners(fullText, candidates, fallback) {
@@ -698,7 +839,6 @@ Analise a transcrição de reunião abaixo e retorne EXCLUSIVAMENTE um JSON vál
   "refMonthYear": "Mês/Ano de referência dos indicadores (ex: Outubro/2026)",
   "summary": "Resumo executivo formal em 1 parágrafo claro e completo começando com 'A reunião de indicadores do Contrato ...'",
   "topics": [{"area": "Nome da Área", "text": "Principais números e assuntos em uma linha"}],
-  "indicators": [{"label": "Nome curto", "value": "Valor principal", "status": "ok|warn|danger"}],
   "actions": [{"action": "Descrição objetiva do item de ação", "owner": "Responsáveis", "deadline": "Próx. Reunião Mês/Ano", "status": ""}]
 }
 IMPORTANTE: O campo "status" dentro de cada item de "actions" DEVE vir SEMPRE como string vazia "" porque será preenchido à caneta no papel.

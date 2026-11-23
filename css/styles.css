@@ -484,6 +484,15 @@ body {
    FOLHA A4 — RELATÓRIO / ATA OFICIAL LOCAR (PADRÃO DIE)
    ========================================================================== */
 .a4-sheet {
+  --report-primary: #0a7e3a;
+  --report-primary-dark: #075b29;
+  --report-primary-light: #0d8e42;
+  --report-primary-soft: #f2f9f4;
+  --report-primary-a44: rgba(10, 126, 58, 0.44);
+  --report-primary-a24: rgba(10, 126, 58, 0.24);
+  --report-secondary: #b4c85a;
+  --report-secondary-a50: rgba(180, 200, 90, 0.50);
+  --report-secondary-a36: rgba(180, 200, 90, 0.36);
   width: 210mm;
   min-height: 297mm;
   background: #ffffff;
@@ -498,10 +507,10 @@ body {
   print-color-adjust: exact;
 }
 
-/* Faixa superior encostada no topo absoluto da folha com o verde vivo da logo Locar */
+/* Faixa superior encostada no topo absoluto da folha com a cor principal do relatório */
 .sheet-banner {
   height: 9mm;
-  background: linear-gradient(90deg, #07662e 0%, #0a7e3a 55%, #0d8e42 100%);
+  background: linear-gradient(90deg, var(--report-primary-dark) 0%, var(--report-primary) 55%, var(--report-primary-light) 100%);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -539,20 +548,20 @@ body {
   flex-shrink: 0;
 }
 
-/* Mancha orgânica no verde vivo oficial da logo Locar (estilo DIE com cores vivas) */
+/* Mancha orgânica nas cores configuradas do relatório */
 .organic-blob {
   position: relative;
   width: 68mm;
   height: 34mm;
-  background: linear-gradient(145deg, #0c8c42 0%, #0a7e3a 65%, #086830 100%);
+  background: linear-gradient(145deg, var(--report-primary-light) 0%, var(--report-primary) 65%, var(--report-primary-dark) 100%);
   border-radius: 52% 48% 58% 42% / 44% 55% 45% 56%;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 4mm 6mm;
   box-shadow:
-    -3px 2px 0 1px rgba(10, 126, 58, 0.24),
-    4px -1px 0 2px rgba(180, 200, 90, 0.28);
+    -3px 2px 0 1px var(--report-primary-a24),
+    4px -1px 0 2px var(--report-secondary-a36);
 }
 
 .organic-blob::before {
@@ -563,7 +572,7 @@ body {
   width: 14mm;
   height: 14mm;
   border-radius: 50%;
-  background: rgba(180, 200, 90, 0.45);
+  background: var(--report-secondary-a50);
   z-index: 1;
 }
 
@@ -575,7 +584,7 @@ body {
   width: 11mm;
   height: 11mm;
   border-radius: 50%;
-  background: rgba(180, 200, 90, 0.36);
+  background: var(--report-secondary-a36);
   z-index: 1;
 }
 
@@ -586,7 +595,7 @@ body {
   width: 10mm;
   height: 10mm;
   border-radius: 50%;
-  background: rgba(10, 126, 58, 0.22);
+  background: var(--report-primary-a24);
   z-index: 1;
 }
 
@@ -600,14 +609,18 @@ body {
   object-fit: contain;
 }
 
-/* Tema alternativo: Locar Clássico (Logo Colorida sobre fundo claro) */
+.a4-sheet.has-custom-report-logo .sheet-logo-img {
+  border-radius: 4px;
+}
+
+/* Tema alternativo: Fundo Claro */
 .a4-sheet.theme-locar .sheet-banner {
-  background: var(--locar-green);
+  background: var(--report-primary);
 }
 
 .a4-sheet.theme-locar .organic-blob {
-  background: #f2f7f3;
-  border: 1.5px solid #cde2d2;
+  background: var(--report-primary-soft);
+  border: 1.5px solid var(--report-primary-a24);
   border-radius: 14px;
   box-shadow: none;
   margin-top: 3mm;
@@ -734,15 +747,15 @@ body {
 .topics-box {
   margin: 0 0 4.5mm 10mm;
   padding: 2.5mm 3.5mm;
-  background: #f2f9f4;
-  border-left: 3.5px solid var(--locar-green);
+  background: var(--report-primary-soft);
+  border-left: 3.5px solid var(--report-primary);
   border-radius: 0 4px 4px 0;
   font-size: 8.6pt;
   line-height: 1.35;
 }
 
 .a4-sheet.theme-locar .topics-box {
-  border-left-color: var(--locar-green);
+  border-left-color: var(--report-primary);
 }
 
 .topics-box-title {
@@ -750,12 +763,12 @@ body {
   font-size: 8.7pt;
   text-transform: uppercase;
   letter-spacing: 0.3px;
-  color: var(--locar-green-dark);
+  color: var(--report-primary-dark);
   margin-bottom: 1.5mm;
 }
 
 .a4-sheet.theme-locar .topics-box-title {
-  color: var(--locar-green-dark);
+  color: var(--report-primary-dark);
 }
 
 .topic-line {
@@ -976,7 +989,7 @@ body {
   width: 28mm;
   height: 28mm;
   border-radius: 50%;
-  background: rgba(10, 126, 58, 0.44);
+  background: var(--report-primary-a44);
 }
 
 .fc-2 {
@@ -986,7 +999,7 @@ body {
   width: 19mm;
   height: 19mm;
   border-radius: 50%;
-  background: rgba(180, 200, 90, 0.52);
+  background: var(--report-secondary-a50);
 }
 
 .fc-3 {
@@ -996,7 +1009,7 @@ body {
   width: 18mm;
   height: 18mm;
   border-radius: 50%;
-  background: rgba(10, 126, 58, 0.24);
+  background: var(--report-primary-a24);
 }
 
 [contenteditable="true"]:hover {
@@ -1090,6 +1103,7 @@ body {
   .toast,
   .editor-subbar,
   .locked-banner,
+  .locked-actions-panel,
   #loginScreen,
   .modal-backdrop,
   .view-panel:not(#view-editor) {
@@ -1860,4 +1874,244 @@ body {
   .page-container {
     padding: 14px 12px 24px;
   }
+}
+
+/* -------------------- Simplificação UI & Controles de Cores/Logo -------------------- */
+.filter-toolbar-inputs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.filter-toolbar-inputs input[type="text"] {
+  min-width: 240px;
+  flex: 1;
+  max-width: 380px;
+}
+
+.city-card-simple {
+  gap: 12px;
+  padding: 16px;
+}
+
+.city-card-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ui-muted);
+  padding: 8px 10px;
+  background: #f7faf7;
+  border: 1px solid #e6eee7;
+  border-radius: 8px;
+}
+
+.city-card-summary strong {
+  color: var(--ui-text);
+}
+
+.editor-mode-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.locked-actions-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.locked-panel-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--ui-border);
+  background: #f4f9f5;
+}
+
+.locked-panel-head h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: var(--locar-green-dark);
+}
+
+.locked-actions-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.locked-action-card {
+  background: #f9fbf9;
+  border: 1px solid var(--ui-border);
+  border-radius: 9px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.locked-action-card.done {
+  background: #f1faf3;
+  border-color: #b7ddb9;
+}
+
+.locked-action-card.done .locked-action-title {
+  text-decoration: line-through;
+  color: #4f6a54;
+}
+
+.locked-action-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text);
+  line-height: 1.35;
+}
+
+.locked-action-meta {
+  font-size: 11.5px;
+  color: var(--ui-muted);
+}
+
+.locked-action-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.locked-action-controls select {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: #ffffff;
+}
+
+.locked-panel-foot {
+  padding: 12px 16px;
+  border-top: 1px solid var(--ui-border);
+  background: #f9fbf9;
+}
+
+.logo-upload-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-upload-card .logo-preview-box {
+  width: 128px;
+  height: 68px;
+  flex-shrink: 0;
+}
+
+.logo-upload-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.color-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-input-wrap input[type="color"] {
+  width: 40px;
+  height: 36px;
+  padding: 2px;
+  border: 1px solid var(--ui-border);
+  border-radius: 7px;
+  background: #ffffff;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.color-input-wrap input[type="text"] {
+  font-family: Consolas, monospace;
+  text-transform: lowercase;
+}
+
+.palette-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.palette-swatch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1.5px solid var(--ui-border);
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ui-text);
+  transition: all 0.14s ease;
+}
+
+.palette-swatch:hover {
+  border-color: var(--locar-green);
+  background: #f6faf7;
+}
+
+.palette-swatch.active {
+  border-color: var(--locar-green);
+  box-shadow: 0 0 0 2px rgba(10, 126, 58, 0.18);
+  background: #f0f8f2;
+}
+
+.palette-dots {
+  display: inline-flex;
+  align-items: center;
+}
+
+.palette-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.palette-dot + .palette-dot {
+  margin-left: -4px;
+}
+
+.palette-swatch-del {
+  margin-left: 2px;
+  border: none;
+  background: transparent;
+  color: var(--ui-muted);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.palette-swatch-del:hover {
+  color: var(--danger);
+}
+
+.a4-sheet[data-editable="true"] #sheetLogoImg {
+  cursor: pointer;
+}
+
+.a4-sheet[data-editable="true"] #sheetLogoImg:hover {
+  opacity: 0.9;
 }

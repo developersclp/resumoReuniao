@@ -38,12 +38,12 @@ def new_uuid() -> str:
 
 
 WORKFLOW_LABELS = {
-    "rascunho": "Aguardando envio",
-    "aguardando_envio": "Aguardando envio",
+    "rascunho": "Em edição",
+    "aguardando_envio": "Em edição",
     "link_enviado": "Link enviado",
     "aguardando_confirmacao": "Aguardando confirmação",
     "confirmada": "Confirmada",
-    "link_invalido": "Link expirado ou invalidado",
+    "link_invalido": "Link expirado",
 }
 
 
@@ -104,6 +104,9 @@ class City(Base):
     state_uf: Mapped[str] = mapped_column(String(10), nullable=False, default="")
     logo_data_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     logo_mime_type: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    default_primary_color: Mapped[str] = mapped_column(String(20), nullable=False, default="#0a7e3a")
+    default_secondary_color: Mapped[str] = mapped_column(String(20), nullable=False, default="#b4c85a")
+    report_logo_data_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     institutional_info: Mapped[str] = mapped_column(Text, nullable=False, default="")
     default_local: Mapped[str] = mapped_column(String(180), nullable=False, default="Microsoft Teams")
     default_footer: Mapped[str] = mapped_column(
@@ -128,6 +131,9 @@ class City(Base):
             "state_uf": self.state_uf,
             "has_logo": bool(self.logo_data_url),
             "logo_mime_type": self.logo_mime_type,
+            "has_report_logo": bool(self.report_logo_data_url),
+            "default_primary_color": self.default_primary_color or "#0a7e3a",
+            "default_secondary_color": self.default_secondary_color or "#b4c85a",
             "institutional_info": self.institutional_info,
             "default_local": self.default_local,
             "default_footer": self.default_footer,
@@ -138,6 +144,7 @@ class City(Base):
         }
         if include_logo:
             data["logo_data_url"] = self.logo_data_url or ""
+            data["report_logo_data_url"] = self.report_logo_data_url or ""
         return data
 
 
@@ -164,6 +171,9 @@ class Meeting(Base):
     topics_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     show_kpis_on_sheet: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     header_theme: Mapped[str] = mapped_column(String(20), nullable=False, default="die")
+    primary_color: Mapped[str] = mapped_column(String(20), nullable=False, default="#0a7e3a")
+    secondary_color: Mapped[str] = mapped_column(String(20), nullable=False, default="#b4c85a")
+    report_logo_data_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     density_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="auto")
     extra_blank_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     footer_text: Mapped[str] = mapped_column(
@@ -228,6 +238,9 @@ class Meeting(Base):
             "topics": self.get_topics(),
             "showKpisOnSheet": bool(self.show_kpis_on_sheet),
             "headerTheme": self.header_theme or "die",
+            "primaryColor": self.primary_color or "#0a7e3a",
+            "secondaryColor": self.secondary_color or "#b4c85a",
+            "reportLogoDataUrl": self.report_logo_data_url or "",
             "densityMode": self.density_mode or "auto",
             "extraBlankRows": int(self.extra_blank_rows if self.extra_blank_rows is not None else 1),
             "footerText": self.footer_text or "DIE – Departamento de Inteligência Estratégica",
