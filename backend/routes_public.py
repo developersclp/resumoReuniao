@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 
 from backend.config import BASE_DIR
 from backend.database import SessionLocal
-from backend.models import City, ConsentRecord, Meeting, MeetingVersion, PublicLink, iso_utc, utcnow_naive
+from backend.models import ActionItem, City, ConsentRecord, Meeting, MeetingVersion, PublicLink, iso_utc, utcnow_naive
 from backend.security import (
     build_consent_integrity_hash,
     check_rate_limit,
@@ -21,17 +21,13 @@ from backend.security import (
 
 public_bp = Blueprint("public_consent", __name__)
 
+ALLOWED_TRACKING_STATUSES = {"pendente", "em_andamento", "concluida", "nao_realizada"}
+
 CONSENT_DECLARATION_TEXT = (
-    "Declaro que li integralmente a ata de reunião em PDF apresentada nesta página, "
-    "confirmo ciência e concordância com seu conteúdo, indicadores e plano de ação, "
-    "e autorizo o registro eletrônico auditável deste consentimento em nome da representação da cidade/projeto."
+    "Declaro que li a ata da reunião e confirmo ciência do conteúdo e do plano de ação."
 )
 
-LEGAL_NOTICE_TEXT = (
-    "Registro eletrônico auditável de consentimento vinculado ao hash criptográfico (SHA-256) desta versão exata do PDF. "
-    "Este aceite eletrônico comprova ciência e concordância documental dentro do fluxo operacional LOCAR, "
-    "não equivalendo automaticamente a uma assinatura digital qualificada no padrão ICP-Brasil."
-)
+LEGAL_NOTICE_TEXT = ""
 
 
 def _sync_if_expired(db, link: PublicLink) -> bool:
@@ -142,6 +138,7 @@ def get_public_ata_details(token: str):
                             "generated_at": iso_utc(version.generated_at),
                         },
                         "consent": consent.to_dict() if consent else None,
+                        "actions": [act.to_dict() for act in meeting.actions],
                         "pdf_url": f"/api/public/atas/{token}/pdf",
                         "pdf_download_url": f"/api/public/atas/{token}/pdf?download=1",
                         "legal_notice": LEGAL_NOTICE_TEXT,
@@ -204,6 +201,7 @@ def get_public_ata_details(token: str):
                         "expires_at": iso_utc(link.expires_at),
                         "view_count": link.view_count,
                     },
+                    "actions": [act.to_dict() for act in meeting.actions],
                     "declaration_text": CONSENT_DECLARATION_TEXT,
                     "legal_notice": LEGAL_NOTICE_TEXT,
                     "pdf_url": f"/api/public/atas/{token}/pdf",
@@ -420,5 +418,83 @@ def submit_public_consent(token: str):
     except IntegrityError:
         db.rollback()
         return jsonify({"error": "Esta ata já recebeu confirmação em uma requisição paralela."}), 409
+    finally:
+        db.close()
+
+
+@public_bp.route("/api/public/atas/<token>/actions/<action_id>", methods=["PATCH"])
+def update_public_action_status(token: str, action_id: str):
+    """Permite ao representante da cidade atualizar status e observações do Plano de Ação pelo link público."""
+    ip = get_client_ip(request)
+    if not check_rate_limit(f"public_action:{ip}", max_hits=120, window_seconds=600):
+        return jsonify({"error": "Limite de requisições excedido. Aguarde alguns minutos."}), 429
+
+    db = SessionLocal()
+    try:
+        token_hash = sha256_hex(token)
+        link = db.query(PublicLink).filter(PublicLink.token_hash == token_hash).first()
+        if not link:
+            return jsonify({"error": "Link público não encontrado."}), 404
+
+        _sync_if_expired(db, link)
+        if link.status not in ("active", "used"):
+            return jsonify({"error": "Este link expirou ou foi invalidado."}), 410
+
+        item = (
+            db.query(ActionItem)
+            .filter(ActionItem.id == action_id, ActionItem.meeting_id == link.meeting_id)
+            .first()
+        )
+        if not item:
+            return jsonify({"error": "Item do plano de ação não encontrado."}), 404
+
+        data = request.get_json(silent=True) or {}
+        if "tracking_status" in data:
+            ts = str(data.get("tracking_status") or "pendente").strip()
+            if ts not in ALLOWED_TRACKING_STATUSES:
+                return jsonify({"error": "Status inválido."}), 400
+            item.tracking_status = ts
+
+        if "checked_completed" in data:
+            checked = bool(data.get("checked_completed"))
+            item.checked_completed = checked
+            if "tracking_status" not in data:
+                item.tracking_status = "concluida" if checked else "pendente"
+        elif "tracking_status" in data:
+            item.checked_completed = item.tracking_status == "concluida"
+
+        if "follow_up_notes" in data:
+            item.follow_up_notes = str(data.get("follow_up_notes") or "")[:500]
+
+        updated_by = str(data.get("updated_by") or "").strip()[:120]
+        consent_name = ""
+        if link.consent:
+            consent_name = link.consent.representative_name
+        elif link.meeting and link.meeting.consents:
+            consent_name = link.meeting.consents[0].representative_name
+        actor_name = updated_by or consent_name or "Representante da Cidade"
+
+        item.checked_at = utcnow_naive() if item.checked_completed else None
+        item.checked_by = actor_name if item.checked_completed else None
+
+        log_audit(
+            db,
+            event_type="public_action_status_updated",
+            actor_type="representative",
+            actor_identifier=actor_name,
+            city_id=link.city_id,
+            meeting_id=link.meeting_id,
+            meeting_version_id=link.meeting_version_id,
+            details={
+                "action_id": item.id,
+                "tracking_status": item.tracking_status,
+                "checked_completed": item.checked_completed,
+            },
+            ip_address=ip,
+            user_agent=request.headers.get("User-Agent", ""),
+        )
+        db.commit()
+        db.refresh(item)
+        return jsonify({"ok": True, "action": item.to_dict()}), 200
     finally:
         db.close()

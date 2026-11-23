@@ -70,11 +70,28 @@ def run_all_tests() -> None:
         assert r_login.status_code == 200, f"Login falhou: {r_login.get_data(as_text=True)}"
         assert r_login.get_json()["authenticated"] is True
 
-        # 3. Verificar 12 cidades e edição de cidade/logo preservando histórico
+        # 3. Verificar as 12 cidades oficiais na ordem exata e edição de cidade/logo preservando histórico
         r_dash = client.get("/api/dashboard")
         assert r_dash.status_code == 200
         dash = r_dash.get_json()
         assert dash["summary"]["total_cities"] == 12, f"Esperado 12 cidades, veio {dash['summary']['total_cities']}"
+
+        expected_official_names = [
+            "Cabo de Santo Agostinho",
+            "Jaboatão dos Guararapes",
+            "Olinda",
+            "Paulista",
+            "Caruaru",
+            "Cuiabá",
+            "Garanhuns",
+            "Pesqueira",
+            "Vitória de Santo Antão",
+            "Canela",
+            "Jequié",
+            "Novo Hamburgo",
+        ]
+        actual_names = [entry["city"]["name"] for entry in dash["cities"]]
+        assert actual_names == expected_official_names, f"Ordem/nomes das 12 cidades divergem: {actual_names}"
 
         caruaru_entry = next(c for c in dash["cities"] if c["city"]["slug"] == "caruaru")
         vitoria_entry = next(c for c in dash["cities"] if c["city"]["slug"] == "vitoria-de-santo-antao")
@@ -175,17 +192,41 @@ def run_all_tests() -> None:
         assert r_track_while_sent.status_code == 200
         assert r_track_while_sent.get_json()["action"]["tracking_status"] == "em_andamento"
 
-        # 6. Sessão pública, visualização do PDF e consentimento concorrente
+        # 6. Sessão pública sem hash/SHA, atualização de Plano de Ação pelo link, PDF e consentimento concorrente
         pub_client = app.test_client()
         r_pub_page = pub_client.get(f"/ata/{token}")
         assert r_pub_page.status_code == 200
         assert b"Confirmar e registrar consentimento" in r_pub_page.data
+        assert b"SHA-256" not in r_pub_page.data, "Página pública não deve exibir SHA-256"
+        assert b"Hash de integridade" not in r_pub_page.data, "Página pública não deve exibir Hash de integridade"
 
         r_pub_meta = pub_client.get(f"/api/public/atas/{token}")
         assert r_pub_meta.status_code == 200
         pub_meta = r_pub_meta.get_json()
         assert pub_meta["state"] == "pending_consent"
         assert pub_meta["city"]["logo_data_url"] == logo_url
+        assert len(pub_meta.get("actions") or []) == len(v1_actions), "Link público deve retornar as ações do Plano de Ação"
+
+        # Atualização do status do Plano de Ação diretamente pelo link público (antes do consentimento)
+        second_action_id = v1_actions[1]["id"]
+        r_pub_act1 = pub_client.patch(
+            f"/api/public/atas/{token}/actions/{second_action_id}",
+            json={"tracking_status": "em_andamento", "follow_up_notes": "Atualizado pela cidade"},
+        )
+        assert r_pub_act1.status_code == 200, r_pub_act1.get_data(as_text=True)
+        assert r_pub_act1.get_json()["action"]["tracking_status"] == "em_andamento"
+        assert r_pub_act1.get_json()["action"]["follow_up_notes"] == "Atualizado pela cidade"
+
+        # Ação pertencente a outra reunião deve retornar 404 pelo token de Caruaru
+        r_vit_detail = client.get(f"/api/meetings/{vitoria_meeting_id}").get_json()
+        vit_action_id = r_vit_detail["meeting"]["snapshot"]["actions"][0]["id"]
+        assert (
+            pub_client.patch(
+                f"/api/public/atas/{token}/actions/{vit_action_id}",
+                json={"tracking_status": "concluida"},
+            ).status_code
+            == 404
+        )
 
         r_m_check = client.get(f"/api/meetings/{caruaru_meeting_id}")
         assert r_m_check.get_json()["meeting"]["workflow_status"] == "aguardando_confirmacao"
@@ -225,7 +266,15 @@ def run_all_tests() -> None:
         assert client.put(f"/api/meetings/{caruaru_meeting_id}", json={"title": "Alteracao Silenciosa"}).status_code == 409
         assert client.post(f"/api/meetings/{caruaru_meeting_id}/public-link", json={}).status_code == 409
 
-        # 7. Alteração de status do Plano de Ação após consentimento sem alterar PDF congelado
+        # Atualização do status do Plano de Ação pelo link público DEVE continuar funcionando após o consentimento
+        r_pub_act2 = pub_client.patch(
+            f"/api/public/atas/{token}/actions/{second_action_id}",
+            json={"checked_completed": False, "tracking_status": "pendente", "follow_up_notes": "Aguardando retorno"},
+        )
+        assert r_pub_act2.status_code == 200
+        assert r_pub_act2.get_json()["action"]["tracking_status"] == "pendente"
+
+        # 7. Alteração de status do Plano de Ação pelo admin após consentimento sem alterar PDF congelado
         r_check = client.patch(
             f"/api/actions/{first_action_id}/tracking",
             json={"checked_completed": True, "tracking_status": "concluida", "follow_up_notes": "Auditoria concluída"},
@@ -237,7 +286,7 @@ def run_all_tests() -> None:
         v1_meta = next(v for v in r_vers_after["versions"] if v["version_number"] == 1)
         assert v1_meta["pdf_sha256"] == v1_sha_before
 
-        # 8. Próxima reunião puxa apenas pendências da anterior, sem copiar o resumo antigo, e herda cores/logo
+        # 8. Próxima reunião puxa apenas pendências da anterior, sem copiar o resumo antigo e SEM duplicar na timeline
         r_new_m = client.post(
             f"/api/cities/{caruaru_id}/meetings",
             json={
@@ -263,7 +312,17 @@ def run_all_tests() -> None:
         )
         assert all(a["status"] == "" for a in imported_actions), "Coluna Status no papel deve iniciar vazia"
 
-        # 9. Revogação de link em Vitória -> link_invalido e 410 na rota pública
+        # Verificar que action_history na timeline da cidade NÃO duplica as pendências herdadas
+        r_tl_after = client.get(f"/api/cities/{caruaru_id}/timeline").get_json()
+        action_history = r_tl_after["action_history"]
+        assert len(action_history) == len(v1_actions), (
+            f"Plano de ação consolidado não pode duplicar pendências herdadas; esperado {len(v1_actions)}, veio {len(action_history)}"
+        )
+        # Todas as pendentes devem pertencer à reunião nova (Novembro/2026) e a concluída à anterior (Outubro/2026)
+        assert sum(1 for a in action_history if a["meeting_id"] == new_m_data["meeting"]["id"]) == len(v1_actions) - 1
+        assert sum(1 for a in action_history if a["meeting_id"] == caruaru_meeting_id and a["checked_completed"]) == 1
+
+        # 9. Revogação de link em Vitória -> link_invalido e 410 na rota pública (incluindo PATCH de ação)
         r_link_vit = client.post(f"/api/meetings/{vitoria_meeting_id}/public-link", json={}).get_json()
         token_vit = r_link_vit["public_url"].rsplit("/", 1)[-1]
         r_rev = client.post(f"/api/public-links/{r_link_vit['link']['id']}/revoke", json={"reason": "Teste revogação"})
@@ -271,6 +330,40 @@ def run_all_tests() -> None:
         assert r_rev.get_json()["workflow_status"] == "link_invalido"
         assert pub_client.get(f"/api/public/atas/{token_vit}").status_code == 410
         assert pub_client.get(f"/api/public/atas/{token_vit}/pdf").status_code == 410
+        assert (
+            pub_client.patch(
+                f"/api/public/atas/{token_vit}/actions/{vit_action_id}",
+                json={"tracking_status": "concluida"},
+            ).status_code
+            == 410
+        )
+
+        # 10. Teste de migração idempotente de placeholders antigos (Cidade / Projeto 03..12) para as 12 cidades oficiais
+        import backend.database as db_mod
+        from backend.models import City
+        from backend.seed import seed_initial_data
+
+        db_mod.engine.dispose()
+        mig_db_path = Path(tmp_dir) / "mig_test.db"
+        db_mod.reconfigure_engine(f"sqlite:///{mig_db_path.as_posix()}")
+        db_mod.init_db()
+        db_mig = db_mod.SessionLocal()
+        try:
+            db_mig.add(City(slug="caruaru", name="Caruaru", project_name="Caruaru", project_code="LOCAR-01", state_uf="PE", display_order=1))
+            db_mig.add(City(slug="vitoria-de-santo-antao", name="Vitória de Santo Antão", project_name="Vitória", project_code="LOCAR-02", state_uf="PE", display_order=2))
+            for n in range(3, 13):
+                db_mig.add(City(slug=f"cidade-{n:02d}", name=f"Cidade / Projeto {n:02d}", project_name=f"Unidade {n:02d}", project_code=f"LOCAR-{n:02d}", state_uf="PE", display_order=n))
+            db_mig.commit()
+
+            seed_initial_data(db_mig)
+            seed_initial_data(db_mig)  # Idempotente na segunda chamada
+
+            migrated_cities = db_mig.query(City).order_by(City.display_order).all()
+            assert [c.name for c in migrated_cities] == expected_official_names, (
+                f"Migração das 12 cidades falhou: {[c.name for c in migrated_cities]}"
+            )
+        finally:
+            db_mig.close()
 
         print("TODOS OS TESTES AUTOMATIZADOS PASSARAM COM SUCESSO!")
     finally:

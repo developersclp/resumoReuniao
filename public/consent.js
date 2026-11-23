@@ -1,4 +1,4 @@
-// Script da página pública de visualização da ata em PDF e registro de consentimento
+// Script da página pública: visualização da ata em PDF, atualização do Plano de Ação e registro de ciência
 (function () {
   const $ = (id) => document.getElementById(id);
 
@@ -7,6 +7,8 @@
   let currentDownloadUrl = "";
   let pdfDoc = null;
   let pdfScale = 1.15;
+  let publicActions = [];
+  let saveBadgeTimer = null;
 
   function extractTokenFromPath() {
     const parts = window.location.pathname.split("/").filter(Boolean);
@@ -26,6 +28,135 @@
     }
   }
 
+  function escapeHtml(str) {
+    return String(str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function escapeAttr(str) {
+    return escapeHtml(str).replace(/'/g, "&#39;");
+  }
+
+  function showSaveBadge(text = "Salvo ✓", isError = false) {
+    const badge = $("pubActionSaveBadge");
+    if (!badge) return;
+    badge.textContent = text;
+    badge.classList.remove("hidden", "error");
+    if (isError) badge.classList.add("error");
+    clearTimeout(saveBadgeTimer);
+    saveBadgeTimer = setTimeout(() => badge.classList.add("hidden"), 2500);
+  }
+
+  function updateActionsProgress() {
+    const total = publicActions.length;
+    const done = publicActions.filter((a) => Boolean(a.checked_completed)).length;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    const textEl = $("pubActionsProgressText");
+    const fillEl = $("pubActionsProgressFill");
+    if (textEl) textEl.textContent = `${done} de ${total} concluídas`;
+    if (fillEl) fillEl.style.width = `${pct}%`;
+  }
+
+  async function savePublicAction(actionObj, payload) {
+    const repNameInput = $("repFullName");
+    const updatedBy = repNameInput && repNameInput.value.trim() ? repNameInput.value.trim() : "";
+    try {
+      const res = await fetch(
+        `/api/public/atas/${encodeURIComponent(token)}/actions/${encodeURIComponent(actionObj.id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...payload,
+            ...(updatedBy ? { updated_by: updatedBy } : {})
+          })
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Erro ao salvar status.");
+      }
+      if (data.action) {
+        Object.assign(actionObj, data.action);
+      }
+      updateActionsProgress();
+      showSaveBadge("Salvo ✓");
+    } catch (err) {
+      showSaveBadge(err.message || "Erro ao salvar", true);
+    }
+  }
+
+  function renderPublicActions() {
+    const container = $("pubActionsList");
+    if (!container) return;
+    container.innerHTML = "";
+    updateActionsProgress();
+
+    if (!publicActions || publicActions.length === 0) {
+      container.innerHTML = `<p class="muted-text" style="margin:0;">Nenhum item no plano de ação desta reunião.</p>`;
+      return;
+    }
+
+    publicActions.forEach((act) => {
+      const card = document.createElement("div");
+      card.className = `pub-action-row ${act.checked_completed ? "done" : ""}`;
+      card.innerHTML = `
+        <div class="pub-action-check">
+          <input type="checkbox" class="js-pub-chk" ${act.checked_completed ? "checked" : ""} aria-label="Marcar ação como concluída" />
+        </div>
+        <div class="pub-action-main">
+          <div class="pub-action-title">${escapeHtml(act.action || "Item sem descrição")}</div>
+          <div class="pub-action-meta">
+            <span><strong>Responsável:</strong> ${escapeHtml(act.owner || "—")}</span>
+            <span><strong>Prazo:</strong> ${escapeHtml(act.deadline || "—")}</span>
+          </div>
+        </div>
+        <div class="pub-action-controls">
+          <select class="js-pub-status" aria-label="Status da ação">
+            <option value="pendente" ${act.tracking_status === "pendente" ? "selected" : ""}>Pendente</option>
+            <option value="em_andamento" ${act.tracking_status === "em_andamento" ? "selected" : ""}>Em andamento</option>
+            <option value="concluida" ${act.tracking_status === "concluida" ? "selected" : ""}>Concluída</option>
+            <option value="nao_realizada" ${act.tracking_status === "nao_realizada" ? "selected" : ""}>Não realizada</option>
+          </select>
+          <input type="text" class="js-pub-notes" value="${escapeAttr(act.follow_up_notes || "")}" placeholder="Observação / evidência..." />
+        </div>
+      `;
+
+      const chk = card.querySelector(".js-pub-chk");
+      const sel = card.querySelector(".js-pub-status");
+      const notes = card.querySelector(".js-pub-notes");
+
+      const commitChange = async () => {
+        act.checked_completed = chk.checked;
+        act.tracking_status = sel.value;
+        act.follow_up_notes = notes.value;
+        card.classList.toggle("done", act.checked_completed);
+        await savePublicAction(act, {
+          checked_completed: act.checked_completed,
+          tracking_status: act.tracking_status,
+          follow_up_notes: act.follow_up_notes
+        });
+      };
+
+      chk.addEventListener("change", async () => {
+        sel.value = chk.checked ? "concluida" : "pendente";
+        await commitChange();
+      });
+
+      sel.addEventListener("change", async () => {
+        chk.checked = sel.value === "concluida";
+        await commitChange();
+      });
+
+      notes.addEventListener("change", commitChange);
+
+      container.appendChild(card);
+    });
+  }
+
   async function renderPdfWithPdfJs(pdfUrl) {
     const container = $("pdfCanvasContainer");
     const fallbackFrame = $("pdfFallbackFrame");
@@ -40,12 +171,11 @@
       fallbackFrame.classList.add("hidden");
       container.classList.remove("hidden");
     } catch (_) {
-      // Fallback imediato para iframe nativo caso rede/CDN não esteja disponível
       pdfDoc = null;
       container.classList.add("hidden");
       fallbackFrame.src = `${pdfUrl}#view=FitH`;
       fallbackFrame.classList.remove("hidden");
-      $("pdfPageInfo").textContent = "Visualização nativa do navegador";
+      $("pdfPageInfo").textContent = "Visualização nativa";
     }
   }
 
@@ -76,7 +206,7 @@
       container.appendChild(canvas);
     }
 
-    $("pdfPageInfo").textContent = `${pdfDoc.numPages} página(s) • Documento integral carregado`;
+    $("pdfPageInfo").textContent = `${pdfDoc.numPages} página(s)`;
     $("pdfZoomLabel").textContent = `${Math.round(pdfScale * 100)}%`;
   }
 
@@ -99,29 +229,17 @@
     }
   }
 
-  function escapeHtml(str) {
-    return String(str || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
-
-  function renderReceipt(consent, legalNotice) {
+  function renderReceipt(consent) {
     $("consentFormWrap").classList.add("hidden");
     $("consentReceiptWrap").classList.remove("hidden");
 
     $("recProtocol").textContent = consent.protocol_code || "—";
     $("recCityProject").textContent = `${consent.city_name || ""} — ${consent.project_name || ""}`;
     $("recMeeting").textContent = `${consent.meeting_title || ""} (${consent.reference_label || ""})`;
-    $("recVersion").textContent = `Versão v${consent.version_number}`;
     $("recName").textContent = consent.representative_name || "—";
     $("recEmail").textContent = consent.representative_email || "—";
     $("recAcceptedAt").textContent = formatDateTime(consent.accepted_at);
-    $("recPdfHash").textContent = consent.pdf_sha256 || "—";
-    $("recIntegrityHash").textContent = consent.integrity_hash || "—";
     $("btnReceiptDownloadPdf").href = currentDownloadUrl;
-    $("recLegalNotice").textContent = legalNotice || "";
   }
 
   async function loadPublicAta() {
@@ -159,7 +277,6 @@
 
       const city = data.city || {};
       const meeting = data.meeting || {};
-      const version = data.version || {};
 
       if (city.logo_data_url) {
         $("pubCityLogoImg").src = city.logo_data_url;
@@ -168,13 +285,14 @@
         $("pubCityLogoWrap").classList.add("hidden");
       }
 
-      $("pubMeetingTitle").textContent = meeting.title || "Ata de Reunião de Indicadores";
+      $("pubMeetingTitle").textContent = meeting.title || "Ata de Reunião";
       $("pubCityProject").textContent = `${city.name || ""}${city.project_name ? " — " + city.project_name : ""}`;
       $("pubMeetingDate").textContent = meeting.date_text || "—";
       $("pubReferenceLabel").textContent = meeting.reference_label || "—";
       $("pubMeetingLocal").textContent = meeting.local || "Microsoft Teams";
-      $("pubVersionBadge").textContent = `Versão v${version.version_number}`;
-      $("pubPdfHash").textContent = version.pdf_sha256 || "—";
+
+      publicActions = Array.isArray(data.actions) ? data.actions : [];
+      renderPublicActions();
 
       currentPdfUrl = data.pdf_url;
       currentDownloadUrl = data.pdf_download_url;
@@ -184,12 +302,11 @@
       await renderPdfWithPdfJs(currentPdfUrl);
 
       if (data.state === "confirmed" && data.consent) {
-        renderReceipt(data.consent, data.legal_notice);
+        renderReceipt(data.consent);
       } else {
         $("consentFormWrap").classList.remove("hidden");
         $("consentReceiptWrap").classList.add("hidden");
         $("declarationText").textContent = data.declaration_text || "";
-        $("pubLegalNotice").textContent = data.legal_notice || "";
       }
     } catch (err) {
       showUnavailable("Falha de conexão", "Não foi possível comunicar com o servidor da LOCAR.");
@@ -217,7 +334,7 @@
       const btn = $("btnConfirmConsent");
       const oldText = btn.textContent;
       btn.disabled = true;
-      btn.textContent = "Registrando consentimento...";
+      btn.textContent = "Confirmando...";
 
       try {
         const res = await fetch(`/api/public/atas/${encodeURIComponent(token)}/consent`, {
@@ -236,7 +353,7 @@
         if (!res.ok) {
           throw new Error(data.error || "Não foi possível registrar o consentimento.");
         }
-        renderReceipt(data.consent, data.legal_notice);
+        renderReceipt(data.consent);
       } catch (err) {
         errBox.textContent = err.message;
         errBox.classList.remove("hidden");

@@ -604,6 +604,33 @@ def update_admin_user(user_id: str):
 # -------------------- Dashboard Geral do Grupo LOCAR --------------------
 
 
+def _normalize_action_text(text: str | None) -> str:
+    return " ".join((text or "").strip().lower().split())
+
+
+def _iter_consolidated_city_actions(meetings: list[Meeting]):
+    """Retorna ações consolidadas da cidade da reunião mais recente p/ a mais antiga, sem duplicar pendências herdadas."""
+    superseded_ids = {
+        act.origin_action_id
+        for mt in meetings
+        for act in mt.actions
+        if act.origin_action_id
+    }
+    seen_pending_texts: set[str] = set()
+    consolidated: list[tuple[Meeting, ActionItem]] = []
+    for mt in meetings:
+        for act in mt.actions:
+            if act.id in superseded_ids:
+                continue
+            norm_text = _normalize_action_text(act.action_text)
+            if not act.checked_completed and norm_text:
+                if norm_text in seen_pending_texts:
+                    continue
+                seen_pending_texts.add(norm_text)
+            consolidated.append((mt, act))
+    return consolidated
+
+
 @admin_bp.route("/dashboard", methods=["GET"])
 @require_admin
 def get_dashboard():
@@ -626,18 +653,19 @@ def get_dashboard():
         latest = meetings[0] if meetings else None
         latest_summary = _serialize_meeting_summary(g.db, latest) if latest else None
 
-        city_pending = 0
-        city_completed = 0
         for mt in meetings:
             sync_expired_links_for_meeting(g.db, mt)
             bucket = "aguardando_envio" if mt.workflow_status == "rascunho" else mt.workflow_status
             if bucket in status_counts:
                 status_counts[bucket] += 1
-            for act in mt.actions:
-                if act.checked_completed:
-                    city_completed += 1
-                else:
-                    city_pending += 1
+
+        city_pending = 0
+        city_completed = 0
+        for _mt, act in _iter_consolidated_city_actions(meetings):
+            if act.checked_completed:
+                city_completed += 1
+            else:
+                city_pending += 1
 
         pending_actions_total += city_pending
         completed_actions_total += city_completed
@@ -863,15 +891,14 @@ def get_city_timeline(city_id: str):
         indicator_matrix.append({"label": label, "series": row_values})
 
     action_history = []
-    for mt in meetings:
-        for act in mt.actions:
-            d = act.to_dict()
-            d["meeting_title"] = mt.title
-            d["reference_label"] = mt.reference_label
-            d["meeting_date"] = mt.meeting_date
-            d["date_text"] = mt.date_text
-            d["meeting_workflow_status"] = mt.workflow_status
-            action_history.append(d)
+    for mt, act in _iter_consolidated_city_actions(meetings):
+        d = act.to_dict()
+        d["meeting_title"] = mt.title
+        d["reference_label"] = mt.reference_label
+        d["meeting_date"] = mt.meeting_date
+        d["date_text"] = mt.date_text
+        d["meeting_workflow_status"] = mt.workflow_status
+        action_history.append(d)
 
     return (
         jsonify(
@@ -1202,14 +1229,18 @@ def import_pending_actions(meeting_id: str):
         return jsonify({"error": "Nenhuma reunião anterior encontrada para esta cidade."}), 404
 
     existing_origins = {a.origin_action_id for a in meeting.actions if a.origin_action_id}
+    existing_texts = {_normalize_action_text(a.action_text) for a in meeting.actions if _normalize_action_text(a.action_text)}
     sort_idx = len(meeting.actions)
     imported_count = 0
 
     for src in source.actions:
         if src.checked_completed or src.tracking_status == "concluida":
             continue
-        if src.id in existing_origins:
+        norm_src = _normalize_action_text(src.action_text)
+        if src.id in existing_origins or (norm_src and norm_src in existing_texts):
             continue
+        if norm_src:
+            existing_texts.add(norm_src)
         g.db.add(
             ActionItem(
                 meeting_id=meeting.id,

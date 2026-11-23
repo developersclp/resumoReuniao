@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LOCAR — Visualização da Ata e Registro de Consentimento</title>
+  <title>LOCAR — Ata &amp; Plano de Ação</title>
   <link rel="icon" type="image/png" href="/assets/logo-locar.png" />
   <link rel="stylesheet" href="/public/consent.css" />
 </head>
@@ -11,73 +11,84 @@
   <header class="pub-header">
     <div class="pub-header-inner">
       <div class="pub-brand">
-        <img src="/assets/logo-locar.png" alt="LOCAR Gestão de Resíduos" class="pub-logo-locar" />
+        <img src="/assets/logo-locar.png" alt="LOCAR" class="pub-logo-locar" />
         <div>
-          <div class="pub-brand-title">LOCAR Gestão de Resíduos</div>
-          <div class="pub-brand-sub">DIE – Departamento de Inteligência Estratégica • Portal Público de Atas</div>
+          <div class="pub-brand-title">LOCAR — Ata &amp; Plano de Ação</div>
+          <div class="pub-brand-sub">Acompanhamento Mensal de Reuniões</div>
         </div>
-      </div>
-      <div class="pub-security-pill">
-        Acesso individualizado sem necessidade de cadastro ou senha
       </div>
     </div>
   </header>
 
   <main class="pub-main">
-    <!-- Estado de Carregamento -->
+    <!-- Carregando -->
     <section id="stateLoading" class="pub-card center-card">
       <div class="spinner" aria-hidden="true"></div>
-      <p>Carregando documento oficial da ata...</p>
+      <p>Carregando ata da reunião...</p>
     </section>
 
-    <!-- Estado Inválido / Expirado / Não Encontrado -->
+    <!-- Link Indisponível -->
     <section id="stateUnavailable" class="pub-card center-card hidden">
       <div class="status-icon warn" aria-hidden="true">!</div>
       <h1 id="unavailTitle">Link indisponível</h1>
       <p id="unavailMessage" class="muted-text"></p>
       <div id="unavailMeta" class="unavail-meta hidden"></div>
-      <p class="legal-small" style="margin-top:16px;">
-        Caso precise de um novo acesso, solicite à equipe administrativa da LOCAR a geração de um novo link público.
-      </p>
     </section>
 
-    <!-- Conteúdo Principal (Pendente de Consentimento ou Já Confirmado) -->
+    <!-- Conteúdo Principal -->
     <div id="stateReady" class="hidden">
-      <!-- Identificação da Cidade/Projeto, Data e Período -->
+      <!-- Identificação -->
       <section class="pub-card identity-card">
         <div class="identity-left">
           <div id="pubCityLogoWrap" class="pub-city-logo hidden">
             <img id="pubCityLogoImg" src="" alt="Logotipo da Cidade" />
           </div>
-          <div>
-            <div class="identity-eyebrow">Ata Oficial de Reunião de Indicadores &amp; Plano de Ação</div>
+          <div style="flex:1; min-width:220px;">
+            <div class="identity-eyebrow">Ata de Reunião &amp; Plano de Ação</div>
             <h1 id="pubMeetingTitle" class="identity-title"></h1>
             <div class="identity-grid">
               <div><span>Cidade / Projeto:</span> <strong id="pubCityProject"></strong></div>
               <div><span>Data da Reunião:</span> <strong id="pubMeetingDate"></strong></div>
-              <div><span>Período de Referência:</span> <strong id="pubReferenceLabel"></strong></div>
+              <div><span>Período:</span> <strong id="pubReferenceLabel"></strong></div>
               <div><span>Local:</span> <strong id="pubMeetingLocal"></strong></div>
-              <div><span>Versão do Documento:</span> <strong id="pubVersionBadge"></strong></div>
-              <div><span>Hash SHA-256 do PDF:</span> <code id="pubPdfHash" class="hash-code"></code></div>
             </div>
           </div>
         </div>
       </section>
 
+      <!-- Plano de Ação Interativo -->
+      <section class="pub-card pub-actions-card">
+        <div class="pub-actions-header">
+          <div>
+            <h2>Plano de Ação — Atualizar Status</h2>
+            <p class="muted-text" style="margin:2px 0 0;">Atualize o andamento das ações desta reunião diretamente abaixo.</p>
+          </div>
+          <div class="pub-progress-wrap">
+            <span id="pubActionSaveBadge" class="pub-save-badge hidden">Salvo ✓</span>
+            <span id="pubActionsProgressText" class="pub-progress-text">0 de 0 concluídas</span>
+            <div class="pub-progress-bar">
+              <div id="pubActionsProgressFill" class="pub-progress-fill" style="width:0%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="pubActionsList" class="pub-actions-list"></div>
+      </section>
+
+      <!-- Visualizador do PDF + Confirmação -->
       <div class="pub-grid">
-        <!-- Coluna Principal: Visualizador Integrado de PDF + Download -->
         <section class="pub-card viewer-card">
           <div class="viewer-toolbar">
             <div class="viewer-toolbar-left">
-              <strong>Documento Integral da Ata (PDF)</strong>
-              <span id="pdfPageInfo" class="page-info">Preparando visualização...</span>
+              <strong>Documento da Ata (PDF)</strong>
+              <span id="pdfPageInfo" class="page-info">Carregando...</span>
             </div>
             <div class="viewer-toolbar-actions">
               <button type="button" id="btnPdfZoomOut" class="btn-pub btn-pub-outline" title="Reduzir zoom">−</button>
               <span id="pdfZoomLabel" class="zoom-label">100%</span>
               <button type="button" id="btnPdfZoomIn" class="btn-pub btn-pub-outline" title="Aumentar zoom">+</button>
               <a id="btnOpenPdfTab" href="#" target="_blank" rel="noopener" class="btn-pub btn-pub-outline">Abrir PDF</a>
-              <a id="btnDownloadPdf" href="#" class="btn-pub btn-pub-primary">Baixar PDF original</a>
+              <a id="btnDownloadPdf" href="#" class="btn-pub btn-pub-primary">Baixar PDF</a>
             </div>
           </div>
 
@@ -87,25 +98,23 @@
           </div>
         </section>
 
-        <!-- Coluna Lateral: Identificação e Consentimento OU Comprovante Confirmado -->
         <aside class="pub-card consent-card">
-          <!-- Formulário de Consentimento -->
           <div id="consentFormWrap">
-            <h2>Identificação e Consentimento</h2>
+            <h2>Confirmar Ciência da Ata</h2>
             <p class="muted-text">
-              Leia integralmente a ata em PDF ao lado (ou faça o download do arquivo original) antes de registrar sua confirmação.
+              Leia a ata ao lado e confirme seu recebimento abaixo.
             </p>
 
             <div id="consentError" class="alert-box error hidden" role="alert"></div>
 
             <form id="consentForm">
               <div class="pub-field">
-                <label for="repFullName">Nome completo do representante *</label>
+                <label for="repFullName">Nome completo *</label>
                 <input type="text" id="repFullName" minlength="3" placeholder="Ex: Maria da Silva" required />
               </div>
 
               <div class="pub-field">
-                <label for="repEmail">E-mail do representante *</label>
+                <label for="repEmail">E-mail *</label>
                 <input type="email" id="repEmail" placeholder="nome@cidade.pe.gov.br" required />
               </div>
 
@@ -123,38 +132,30 @@
                 Confirmar e registrar consentimento
               </button>
             </form>
-
-            <p id="pubLegalNotice" class="legal-small"></p>
           </div>
 
-          <!-- Comprovante após Confirmação -->
           <div id="consentReceiptWrap" class="hidden">
             <div class="receipt-banner">
               <div class="status-icon ok" aria-hidden="true">✓</div>
               <div>
-                <h2>Consentimento Registrado</h2>
-                <p>Confirmação vinculada permanentemente a esta versão exata do PDF.</p>
+                <h2>Ciência Confirmada</h2>
+                <p>Confirmação registrada com sucesso.</p>
               </div>
             </div>
 
             <dl class="receipt-details">
               <div><dt>Protocolo:</dt><dd id="recProtocol"></dd></div>
               <div><dt>Cidade / Projeto:</dt><dd id="recCityProject"></dd></div>
-              <div><dt>Reunião / Referência:</dt><dd id="recMeeting"></dd></div>
-              <div><dt>Versão do PDF:</dt><dd id="recVersion"></dd></div>
+              <div><dt>Reunião:</dt><dd id="recMeeting"></dd></div>
               <div><dt>Representante:</dt><dd id="recName"></dd></div>
-              <div><dt>E-mail informado:</dt><dd id="recEmail"></dd></div>
-              <div><dt>Data e horário do aceite:</dt><dd id="recAcceptedAt"></dd></div>
-              <div><dt>SHA-256 do PDF aceito:</dt><dd><code id="recPdfHash" class="hash-code"></code></dd></div>
-              <div><dt>Hash de integridade:</dt><dd><code id="recIntegrityHash" class="hash-code"></code></dd></div>
+              <div><dt>E-mail:</dt><dd id="recEmail"></dd></div>
+              <div><dt>Data e horário:</dt><dd id="recAcceptedAt"></dd></div>
             </dl>
 
             <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px;">
-              <a id="btnReceiptDownloadPdf" href="#" class="btn-pub btn-pub-primary" style="flex:1;">Baixar PDF confirmado</a>
-              <button type="button" id="btnPrintReceipt" class="btn-pub btn-pub-outline">Imprimir comprovante</button>
+              <a id="btnReceiptDownloadPdf" href="#" class="btn-pub btn-pub-primary" style="flex:1;">Baixar PDF</a>
+              <button type="button" id="btnPrintReceipt" class="btn-pub btn-pub-outline">Imprimir</button>
             </div>
-
-            <p id="recLegalNotice" class="legal-small"></p>
           </div>
         </aside>
       </div>

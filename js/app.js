@@ -503,6 +503,13 @@
           tracking_status: act.tracking_status,
           follow_up_notes: act.follow_up_notes
         });
+        if (selectedCityId && activeView === "city-history") {
+          window.LocarApi.get(`/api/cities/${selectedCityId}/timeline`)
+            .then((tl) => {
+              renderCityTimelineTable(tl.city, tl.meetings || []);
+            })
+            .catch(() => {});
+        }
       };
 
       chk.addEventListener("change", async () => {

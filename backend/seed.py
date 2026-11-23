@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import unicodedata
 
 from sqlalchemy.orm import Session
 
@@ -11,6 +12,26 @@ from backend.models import ActionItem, AdminUser, City, Meeting, MeetingIndicato
 from backend.security import hash_password
 
 logger = logging.getLogger("locar.seed")
+
+OFFICIAL_CITIES = [
+    {"order": 1, "slug": "cabo-de-santo-agostinho", "name": "Cabo de Santo Agostinho", "uf": "PE", "code": "LOCAR-01"},
+    {"order": 2, "slug": "jaboatao-dos-guararapes", "name": "Jaboatão dos Guararapes", "uf": "PE", "code": "LOCAR-02"},
+    {"order": 3, "slug": "olinda", "name": "Olinda", "uf": "PE", "code": "LOCAR-03"},
+    {"order": 4, "slug": "paulista", "name": "Paulista", "uf": "PE", "code": "LOCAR-04"},
+    {"order": 5, "slug": "caruaru", "name": "Caruaru", "uf": "PE", "code": "LOCAR-05"},
+    {"order": 6, "slug": "cuiaba", "name": "Cuiabá", "uf": "MT", "code": "LOCAR-06"},
+    {"order": 7, "slug": "garanhuns", "name": "Garanhuns", "uf": "PE", "code": "LOCAR-07"},
+    {"order": 8, "slug": "pesqueira", "name": "Pesqueira", "uf": "PE", "code": "LOCAR-08"},
+    {"order": 9, "slug": "vitoria-de-santo-antao", "name": "Vitória de Santo Antão", "uf": "PE", "code": "LOCAR-09"},
+    {"order": 10, "slug": "canela", "name": "Canela", "uf": "RS", "code": "LOCAR-10"},
+    {"order": 11, "slug": "jequie", "name": "Jequié", "uf": "BA", "code": "LOCAR-11"},
+    {"order": 12, "slug": "novo-hamburgo", "name": "Novo Hamburgo", "uf": "RS", "code": "LOCAR-12"},
+]
+
+
+def _norm_city_name(value: str) -> str:
+    nfkd = unicodedata.normalize("NFKD", (value or "").strip().lower())
+    return "".join(ch for ch in nfkd if not unicodedata.combining(ch))
 
 CARUARU_PRESET = {
     "reference_month": "2026-10",
@@ -259,8 +280,23 @@ def _create_meeting_from_preset(db: Session, city: City, preset: dict, admin_id:
     return meeting
 
 
+def _build_city_record(spec: dict) -> City:
+    return City(
+        slug=spec["slug"],
+        name=spec["name"],
+        project_name=f"Limpeza Urbana e Coleta de Resíduos — {spec['name']}",
+        project_code=spec["code"],
+        state_uf=spec["uf"],
+        institutional_info=f"Unidade operacional do Grupo LOCAR — {spec['name']}/{spec['uf']}.",
+        default_local="Microsoft Teams",
+        default_footer="DIE – Departamento de Inteligência Estratégica",
+        display_order=spec["order"],
+        is_active=True,
+    )
+
+
 def seed_initial_data(db: Session) -> None:
-    """Inicializa administrador padrão e as 12 cidades/projetos do Grupo LOCAR de forma idempotente."""
+    """Inicializa administrador padrão e as 12 cidades oficiais do Grupo LOCAR de forma idempotente."""
     admin_user = db.query(AdminUser).first()
     if not admin_user:
         cfg = get_admin_seed_config()
@@ -275,53 +311,62 @@ def seed_initial_data(db: Session) -> None:
         db.flush()
         logger.info("Administrador inicial LOCAR criado para o e-mail: %s", cfg["email"])
 
-    existing_cities = db.query(City).count()
-    if existing_cities == 0:
-        caruaru = City(
-            slug="caruaru",
-            name="Caruaru",
-            project_name="Limpeza Urbana e Coleta de Resíduos — Caruaru",
-            project_code="LOCAR-01",
-            state_uf="PE",
-            institutional_info="Projeto operacional de limpeza pública e manejo de resíduos urbanos em Caruaru/PE.",
-            default_local="Microsoft Teams",
-            default_footer="DIE – Departamento de Inteligência Estratégica",
-            display_order=1,
-            is_active=True,
-        )
-        vitoria = City(
-            slug="vitoria-de-santo-antao",
-            name="Vitória de Santo Antão",
-            project_name="Limpeza Urbana e Coleta de Resíduos — Vitória de Santo Antão",
-            project_code="LOCAR-02",
-            state_uf="PE",
-            institutional_info="Projeto operacional de limpeza pública e coleta de resíduos em Vitória de Santo Antão/PE.",
-            default_local="Microsoft Teams",
-            default_footer="DIE – Departamento de Inteligência Estratégica",
-            display_order=2,
-            is_active=True,
-        )
-        db.add(caruaru)
-        db.add(vitoria)
+    existing_cities = db.query(City).order_by(City.display_order, City.created_at).all()
+    if len(existing_cities) == 0:
+        created_by_slug: dict[str, City] = {}
+        for spec in OFFICIAL_CITIES:
+            city = _build_city_record(spec)
+            db.add(city)
+            created_by_slug[spec["slug"]] = city
         db.flush()
 
-        _create_meeting_from_preset(db, caruaru, CARUARU_PRESET, admin_user.id)
-        _create_meeting_from_preset(db, vitoria, VITORIA_PRESET, admin_user.id)
+        _create_meeting_from_preset(db, created_by_slug["caruaru"], CARUARU_PRESET, admin_user.id)
+        _create_meeting_from_preset(db, created_by_slug["vitoria-de-santo-antao"], VITORIA_PRESET, admin_user.id)
+    else:
+        # Sincroniza de forma idempotente bancos que tinham placeholders (Cidade / Projeto 03..12)
+        by_slug = {c.slug: c for c in existing_cities}
+        by_norm_name = {_norm_city_name(c.name): c for c in existing_cities}
+        official_slugs = {s["slug"] for s in OFFICIAL_CITIES}
+        official_names = {_norm_city_name(s["name"]) for s in OFFICIAL_CITIES}
 
-        for num in range(3, 13):
-            code = f"LOCAR-{num:02d}"
-            city = City(
-                slug=f"cidade-{num:02d}",
-                name=f"Cidade / Projeto {num:02d}",
-                project_name=f"Projeto de Limpeza Urbana — Unidade {num:02d}",
-                project_code=code,
-                state_uf="PE",
-                institutional_info="Unidade operacional do Grupo LOCAR. Edite o nome oficial, código e logotipo no módulo Cidades / Projetos.",
-                default_local="Microsoft Teams",
-                default_footer="DIE – Departamento de Inteligência Estratégica",
-                display_order=num,
-                is_active=True,
-            )
-            db.add(city)
+        placeholders = [
+            c
+            for c in existing_cities
+            if (c.slug.startswith("cidade-") or (c.name or "").startswith("Cidade / Projeto"))
+            and c.slug not in official_slugs
+            and _norm_city_name(c.name) not in official_names
+        ]
+        placeholders.sort(key=lambda c: (len(c.meetings), c.display_order))
+
+        for spec in OFFICIAL_CITIES:
+            match = by_slug.get(spec["slug"]) or by_norm_name.get(_norm_city_name(spec["name"]))
+            if match:
+                match.display_order = spec["order"]
+                if not match.state_uf:
+                    match.state_uf = spec["uf"]
+                # Atualiza código padrão antigo do seed (LOCAR-01/LOCAR-02 em Caruaru/Vitória) sem tocar códigos customizados
+                if match.slug == "caruaru" and match.project_code == "LOCAR-01":
+                    match.project_code = spec["code"]
+                elif match.slug == "vitoria-de-santo-antao" and match.project_code == "LOCAR-02":
+                    match.project_code = spec["code"]
+                continue
+
+            if placeholders:
+                target = placeholders.pop(0)
+                target.slug = spec["slug"]
+                target.name = spec["name"]
+                target.project_name = f"Limpeza Urbana e Coleta de Resíduos — {spec['name']}"
+                target.project_code = spec["code"]
+                target.state_uf = spec["uf"]
+                target.institutional_info = f"Unidade operacional do Grupo LOCAR — {spec['name']}/{spec['uf']}."
+                target.display_order = spec["order"]
+                by_slug[target.slug] = target
+                by_norm_name[_norm_city_name(target.name)] = target
+            else:
+                new_city = _build_city_record(spec)
+                db.add(new_city)
+                db.flush()
+                by_slug[new_city.slug] = new_city
+                by_norm_name[_norm_city_name(new_city.name)] = new_city
 
     db.commit()
