@@ -16,7 +16,14 @@ def get_data_dir() -> Path:
 
 
 def get_database_url() -> str:
-    url = (os.environ.get("LOCAR_DATABASE_URL") or os.environ.get("DATABASE_URL") or "").strip()
+    # Prioriza DATABASE_URL (padrão oficial Railway/PaaS)
+    # com fallback para LOCAR_DATABASE_URL ou DATABASE_PUBLIC_URL.
+    url = (
+        os.environ.get("DATABASE_URL")
+        or os.environ.get("LOCAR_DATABASE_URL")
+        or os.environ.get("DATABASE_PUBLIC_URL")
+        or ""
+    ).strip().strip("'\"")
     if url:
         if url.startswith("postgres://"):
             url = "postgresql+psycopg2://" + url[len("postgres://") :]

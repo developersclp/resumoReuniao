@@ -112,11 +112,15 @@ def create_app() -> Flask:
 
     @app.route("/css/<path:filename>", methods=["GET"])
     def serve_css(filename: str):
-        return send_from_directory(BASE_DIR / "css", filename)
+        resp = send_from_directory(BASE_DIR / "css", filename)
+        resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return resp
 
     @app.route("/js/<path:filename>", methods=["GET"])
     def serve_js(filename: str):
-        return send_from_directory(BASE_DIR / "js", filename)
+        resp = send_from_directory(BASE_DIR / "js", filename)
+        resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return resp
 
     @app.route("/assets/<path:filename>", methods=["GET"])
     def serve_assets(filename: str):
@@ -124,7 +128,9 @@ def create_app() -> Flask:
 
     @app.route("/public/<path:filename>", methods=["GET"])
     def serve_public_assets(filename: str):
-        return send_from_directory(BASE_DIR / "public", filename)
+        resp = send_from_directory(BASE_DIR / "public", filename)
+        resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return resp
 
     @app.after_request
     def apply_security_headers(response):
